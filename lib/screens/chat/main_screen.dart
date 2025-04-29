@@ -32,6 +32,7 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   ObjectId? reply; // Add this variable to track the message being replied to
   ObjectId?
   _highlightedMessageId; // Add this variable to track the highlighted message
+  final Map<ObjectId, MessageBubble> _bubbleCache = {};
 
   @override
   void initState() {
@@ -156,7 +157,6 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       if (mounted) {
         setState(() {});
 
-
         // Hacer scroll y luego solicitar foco nuevamente
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _scrollToBottomWithDelay();
@@ -260,18 +260,20 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       itemCount: messages.length,
                       itemBuilder: (context, index) {
                         final msg = messages[index];
-                        return MessageBubble(
-                          chat: chat,
-                          msg: msg,
-                          isMe: msg.sender == user?.id,
-                          isConsecutive:
-                              index > 0 &&
-                              messages[index].sender ==
-                                  messages[index - 1].sender,
-                          // <- 1.1.1) Le pasamos el callback:
-                          onQuotedTap: (ObjectId targetId) {
-                            scrollToMessage(targetId);
-                          },
+                        return _bubbleCache.putIfAbsent(
+                          msg.id!,
+                          () => MessageBubble(
+                            chat: chat,
+                            msg: msg,
+                            isMe: msg.sender == user?.id,
+                            isConsecutive:
+                                index > 0 &&
+                                messages[index].sender ==
+                                    messages[index - 1].sender,
+                            onQuotedTap: (ObjectId targetId) {
+                              scrollToMessage(targetId);
+                            },
+                          ),
                         );
                       },
                     ),

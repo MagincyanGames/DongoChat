@@ -80,15 +80,7 @@ void showMessageContextMenu({
         // Copy message to clipboard
         final messageText = message.message;
         Clipboard.setData(ClipboardData(text: messageText));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: primaryColor,
-            content: const Text(
-              'Mensaje copiado al portapapeles',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        );
+        
         break;
       case 'delete':
         // Handle delete action

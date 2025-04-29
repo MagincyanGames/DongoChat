@@ -44,7 +44,7 @@ class _MessageBubbleState extends State<MessageBubble>
   @override
   void initState() {
     super.initState();
-
+    print("Initializing MessageBubble for message: ${widget.msg.message}");
     final userManager = DBManagers.user;
     _futureUser = userManager.findById(widget.msg.sender);
     isMe = widget.isMe;
@@ -304,6 +304,7 @@ class _MessageBubbleState extends State<MessageBubble>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    print("building ${msg.message}");
     return FutureBuilder<User?>(future: _futureUser, builder: futureBuilder);
   }
 }
