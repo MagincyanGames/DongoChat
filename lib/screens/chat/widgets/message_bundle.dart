@@ -19,7 +19,9 @@ class MessageBubble extends StatefulWidget {
   final Message msg;
   final bool isMe;
   final bool isConsecutive;
-  final void Function(ObjectId targetMessageId)? onQuotedTap;
+  final void Function(ObjectId targetMessageId) onQuotedTap;
+  final void Function(ObjectId messageId) onReply; // Nuevo
+  final void Function(ObjectId messageId)? onDelete; // Nuevo, opcional
 
   const MessageBubble({
     super.key,
@@ -28,6 +30,8 @@ class MessageBubble extends StatefulWidget {
     required this.isMe,
     this.isConsecutive = false,
     required this.onQuotedTap,
+    required this.onReply,
+    this.onDelete,
   });
 
   @override
@@ -59,7 +63,6 @@ class _MessageBubbleState extends State<MessageBubble>
       print("Loading original message: ${msg.data!.resend}");
       _originalMessageFuture = chat.findMessageById(msg.data!.resend!);
     }
-
   }
 
   @override
@@ -69,41 +72,45 @@ class _MessageBubbleState extends State<MessageBubble>
     showMessageContextMenu(
       context: context,
       position: position,
-      message: msg,
+      message: widget.msg,
+      isMe: widget.isMe,
       user: user,
-      isMe: isMe,
+      onReply: widget.onReply,
+      onDelete: widget.onDelete,
     );
   }
 
   // Add this method to build the quoted message UI
   Widget _buildQuotedMessage(Message originalMessage, ThemeData theme) {
     final chatTheme = theme.extension<ChatTheme>();
-    
+
     // Determinar si el mensaje citado es mío (como usuario actual)
-    final isMyMessage = originalMessage.sender == context.watch<UserProvider>().user!.id;
-    
+    final isMyMessage =
+        originalMessage.sender == context.watch<UserProvider>().user!.id;
+
     // Elegir el color del borde y fondo según quién es el autor del mensaje original
     final borderColor = isMe
-        ? chatTheme?.myQuotedMessageBorderColor 
+        ? chatTheme?.myQuotedMessageBorderColor
         : chatTheme?.otherQuotedMessageBorderColor;
-        
+
     final backgroundColor = isMyMessage
         ? chatTheme?.myQuotedMessageBackgroundColor
         : chatTheme?.otherQuotedMessageBackgroundColor;
-    
+
     return GestureDetector(
       onTap: () {
-        widget.onQuotedTap?.call(originalMessage.id!);
+        widget.onQuotedTap.call(originalMessage.id!);
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 4),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: backgroundColor ?? theme.colorScheme.surfaceVariant.withOpacity(0.7),
+          color: backgroundColor ??
+              theme.colorScheme.surfaceVariant.withOpacity(0.7),
           borderRadius: BorderRadius.circular(12),
           border: Border(
             left: BorderSide(
-              color: borderColor ?? theme.colorScheme.primary, 
+              color: borderColor ?? theme.colorScheme.primary,
               width: 3,
             ),
           ),
@@ -115,20 +122,19 @@ class _MessageBubbleState extends State<MessageBubble>
               future: DBManagers.user.findById(originalMessage.sender),
               builder: (context, snapshot) {
                 String userName = 'Desconocido';
-                
-                if (snapshot.connectionState == ConnectionState.done && 
-                    snapshot.hasData && 
+
+                if (snapshot.connectionState == ConnectionState.done &&
+                    snapshot.hasData &&
                     snapshot.data != null) {
                   userName = snapshot.data!.displayName;
                 }
-                
+
                 return Text(
                   userName,
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: borderColor ?? 
-                          theme.colorScheme.primary,
+                    color: borderColor ?? theme.colorScheme.primary,
                   ),
                 );
               },
@@ -140,8 +146,8 @@ class _MessageBubbleState extends State<MessageBubble>
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
-                color: chatTheme?.quotedMessageTextColor ?? 
-                      theme.colorScheme.onSurfaceVariant,
+                color: chatTheme?.quotedMessageTextColor ??
+                    theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -234,14 +240,18 @@ class _MessageBubbleState extends State<MessageBubble>
                 decoration: BoxDecoration(
                   gradient: isMe
                       ? LinearGradient(
-                          colors: Theme.of(context).extension<ChatTheme>()?.myMessageGradient ?? 
-                            [Colors.deepPurple, Colors.deepPurple.shade900],
+                          colors: Theme.of(context)
+                                  .extension<ChatTheme>()
+                                  ?.myMessageGradient ??
+                              [Colors.deepPurple, Colors.deepPurple.shade900],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         )
                       : LinearGradient(
-                          colors: Theme.of(context).extension<ChatTheme>()?.otherMessageGradient ?? 
-                            [Colors.blue.shade900, Colors.blue.shade700],
+                          colors: Theme.of(context)
+                                  .extension<ChatTheme>()
+                                  ?.otherMessageGradient ??
+                              [Colors.blue.shade900, Colors.blue.shade700],
                           begin: Alignment.topRight,
                           end: Alignment.bottomLeft,
                         ),
@@ -279,10 +289,9 @@ class _MessageBubbleState extends State<MessageBubble>
                     Text(
                       msg.message,
                       style: TextStyle(
-                        color:
-                            isMe
-                                ? Theme.of(context).colorScheme.onPrimary
-                                : Theme.of(context).colorScheme.onSecondary,
+                        color: isMe
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSecondary,
                       ),
                     ),
                     if (!isConsecutive) const SizedBox(height: 4),
@@ -291,14 +300,13 @@ class _MessageBubbleState extends State<MessageBubble>
                       style: TextStyle(
                         fontSize: 10,
                         fontStyle: FontStyle.italic,
-                        color:
-                            isMe
-                                ? Theme.of(
-                                  context,
-                                ).colorScheme.onPrimary.withOpacity(0.5)
-                                : Theme.of(
-                                  context,
-                                ).colorScheme.onSecondary.withOpacity(0.5),
+                        color: isMe
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.onPrimary.withOpacity(0.5)
+                            : Theme.of(
+                                context,
+                              ).colorScheme.onSecondary.withOpacity(0.5),
                       ),
                     ),
                   ],

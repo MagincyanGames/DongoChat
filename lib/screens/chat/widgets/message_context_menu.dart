@@ -1,14 +1,16 @@
-import 'package:dongo_chat/screens/chat/main_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:dongo_chat/models/message.dart';
 import 'package:dongo_chat/models/user.dart';
 import 'package:flutter/services.dart';
+import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 
 void showMessageContextMenu({
   required BuildContext context,
   required Offset position,
   required Message message,
   required bool isMe,
+  required Function(ObjectId) onReply,  // Nuevo callback para responder
+  Function(ObjectId)? onDelete,         // Nuevo callback opcional para eliminar
   User? user,
 }) {
   // Get theme colors
@@ -51,7 +53,7 @@ void showMessageContextMenu({
           ],
         ),
       ),
-      if (isMe) // Only show delete option for own messages
+      if (isMe && onDelete != null) // Solo mostrar opción de eliminar para mensajes propios
         PopupMenuItem(
           value: 'delete',
           child: Row(
@@ -75,18 +77,19 @@ void showMessageContextMenu({
         // Copy message to clipboard
         final messageText = message.message;
         Clipboard.setData(ClipboardData(text: messageText));
-
         break;
+        
       case 'delete':
-        // Handle delete action
-        // You'll need to implement this based on your app's architecture
+        // Usar el callback de eliminación
+        if (isMe && onDelete != null && message.id != null) {
+          onDelete(message.id!);
+        }
         break;
+        
       case 'reply':
-        // Get the MainScreen state and set the reply
-        final mainScreenState =
-            context.findAncestorStateOfType<MainScreenState>();
-        if (mainScreenState != null && message.id != null) {
-          mainScreenState.setReplyMessage(message.id!);
+        // Usar el callback de respuesta
+        if (message.id != null) {
+          onReply(message.id!);
         }
         break;
     }

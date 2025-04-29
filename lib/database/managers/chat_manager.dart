@@ -18,11 +18,23 @@ class ChatManager extends DatabaseManager<Chat> {
   @override
   Map<String, dynamic> toMap(item) => item.toMap();
 
-  Chat? _generalChat;
-  bool get isGeneralChatReady => _generalChat != null;
-  Chat getGeneralChat() => _generalChat!;
+  // Mapa para mantener chats cargados en memoria
+  final Map<String, Chat> _loadedChats = {};
 
-  Future<void> addMessageToGeneral(String text, ObjectId? sender, MessageData? data) async {
+  // Verifica si un chat está cargado
+  bool isChatLoaded(String chatName) => _loadedChats.containsKey(chatName);
+  
+  // Obtiene un chat cargado
+  Chat? getChat(String chatName) => _loadedChats[chatName];
+
+  // Añade mensaje a cualquier chat
+  Future<void> addMessageToChat(
+      String chatName, String text, ObjectId? sender, MessageData? data) async {
+    final chat = _loadedChats[chatName];
+    if (chat == null) {
+      throw Exception("Chat no inicializado: $chatName");
+    }
+
     // 1. Cifrar el contenido
     final encryptedData = CryptoUtils.encryptString(text);
 
@@ -39,12 +51,12 @@ class ChatManager extends DatabaseManager<Chat> {
     // 3. Guardar en BD
     final collection = await getCollectionWithRetry();
     await collection.update(
-      {'name': 'general'},
-      { r'$push': {'messages': message.toMap()} },
+      {'name': chatName},
+      {r'$push': {'messages': message.toMap()}},
     );
 
     // 4. Añadir al chat local para refresco inmediato
-    _generalChat?.messages.add(Message(
+    chat.messages.add(Message(
       id: message.id,
       message: text, // Añadir el texto desencriptado
       sender: sender,
@@ -54,18 +66,21 @@ class ChatManager extends DatabaseManager<Chat> {
     ));
   }
 
-  Future<bool> checkForNewMessages() async {
-    if (_generalChat == null) return false;
+  // Verifica nuevos mensajes para cualquier chat
+  Future<bool> checkForNewMessages(String chatName) async {
+    final chat = _loadedChats[chatName];
+    if (chat == null) return false;
+    
     try {
       final collection = await getCollectionWithRetry();
-      final dbChat = await collection.findOne({'name': 'general'});
+      final dbChat = await collection.findOne({'name': chatName});
       if (dbChat == null) return false;
 
       // Chat.fromMap ya descifra los mensajes internamente
       final newChat = Chat.fromMap(dbChat);
 
-      if (!_areMessagesEqual(_generalChat!.messages, newChat.messages)) {
-        _generalChat!.messages = newChat.messages;
+      if (!_areMessagesEqual(chat.messages, newChat.messages)) {
+        chat.messages = newChat.messages;
         return true;
       }
       return false;
@@ -75,22 +90,33 @@ class ChatManager extends DatabaseManager<Chat> {
     }
   }
 
-  Future<bool> initGeneralChat() async {
-    if (_generalChat != null) return true;
+  // Inicializa cualquier chat
+  Future<Chat?> initChat(String chatName) async {
+    // Si ya está cargado, devolver el chat existente
+    if (_loadedChats.containsKey(chatName)) {
+      return _loadedChats[chatName];
+    }
+    
     try {
       final collection = await getCollectionWithRetry();
-      final existing = await collection.findOne({'name': 'general'});
+      final existing = await collection.findOne({'name': chatName});
+      
+      Chat chat;
       if (existing != null) {
         // Chat.fromMap maneja la desencriptación
-        _generalChat = Chat.fromMap(existing);
+        chat = Chat.fromMap(existing);
       } else {
-        _generalChat = Chat(name: 'general', messages: []);
-        await collection.insert(_generalChat!.toMap());
+        // Crear nuevo chat
+        chat = Chat(name: chatName, messages: []);
+        await collection.insert(chat.toMap());
       }
-      return true;
+      
+      // Almacenar en el mapa de chats cargados
+      _loadedChats[chatName] = chat;
+      return chat;
     } catch (e) {
-      print("❌ ERROR en initGeneralChat: $e");
-      return false;
+      print("❌ ERROR en initChat: $e");
+      return null;
     }
   }
 
