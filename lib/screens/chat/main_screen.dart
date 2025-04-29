@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'package:dongo_chat/main.dart';
+import 'package:dongo_chat/widgets/theme_toggle_button.dart';
 import 'package:flutter/services.dart';
 import 'package:dongo_chat/models/message.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +14,7 @@ import 'package:dongo_chat/providers/UserProvider.dart';
 import 'package:dongo_chat/screens/chat/widgets/loadding_screen.dart';
 import 'package:dongo_chat/screens/chat/widgets/message_bundle.dart';
 import 'package:dongo_chat/screens/debug/debug_button.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'widgets/logout_button.dart';
 
 class MainScreen extends StatefulWidget {
@@ -25,7 +28,7 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   // Paso 1: Añadir Observer
   final TextEditingController _controller = TextEditingController();
   final FocusNode _textFieldFocus = FocusNode();
-  final ScrollController _scrollController = ScrollController();
+  final ItemScrollController _itemScrollController = ItemScrollController();
   late final ChatManager _chatManager;
   late final DatabaseService dbService;
   String? _debugError;
@@ -70,12 +73,16 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _scrollToBottomInstant() {
-    if (!_scrollController.hasClients) return;
+    if (!_itemScrollController.isAttached) return;
 
     // Ejecutar después de que se actualice la UI
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Salto inmediato sin animación
-      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      final messages = _chatManager.getGeneralChat().messages;
+
+      final lastIndex = messages.length - 1;
+      if (lastIndex >= 0) {
+        _itemScrollController.jumpTo(index: lastIndex);
+      }
     });
   }
 
@@ -125,16 +132,25 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _scrollToBottomWithDelay() {
-    // Paso 4: Scroll optimizado
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (!_scrollController.hasClients) return;
+    final messages = _chatManager.getGeneralChat().messages;
+
+    // Usar un retraso ligeramente mayor para asegurar que la UI esté lista
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (!_itemScrollController.isAttached) return;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+        final lastIndex = messages.length - 1;
+        if (lastIndex >= 0) {
+          _itemScrollController.scrollTo(
+            index: lastIndex,
+            // Aumentar la duración para una animación más suave
+            duration: const Duration(milliseconds: 400),
+            // Usar una curva más natural para el movimiento
+            curve: Curves.easeOutCubic,
+            // Añadir un pequeño offset para ver mejor el último mensaje
+            alignment: 0.9,
+          );
+        }
       });
     });
   }
@@ -194,29 +210,25 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void scrollToMessage(ObjectId messageId) {
     final messages = _chatManager.getGeneralChat().messages;
 
-    // Find the index of the message in the list
     final index = messages.indexWhere((msg) => msg.id == messageId);
 
-    if (index != -1) {
-      // Add a small delay to allow the UI to update
-      Future.delayed(Duration(milliseconds: 100), () {
-        _scrollController.animateTo(
-          index * 70.0, // Approximate height of each message
-          duration: Duration(milliseconds: 300),
+    if (index != -1 && _itemScrollController.isAttached) {
+      // Esperar a que se estabilice el render
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _itemScrollController.scrollTo(
+          index: index,
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
 
-        // Visual feedback - highlight the message briefly
+        // Visual feedback (highlight)
         setState(() {
           _highlightedMessageId = messageId;
         });
 
-        // Remove highlight after a delay
-        Future.delayed(Duration(seconds: 2), () {
+        Future.delayed(const Duration(seconds: 2), () {
           if (mounted) {
-            setState(() {
-              _highlightedMessageId = null;
-            });
+            setState(() => _highlightedMessageId = null);
           }
         });
       });
@@ -229,7 +241,6 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _textFieldFocus.dispose();
     _refreshTimer?.cancel();
     _controller.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -248,8 +259,8 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     return Scaffold(
       resizeToAvoidBottomInset: true, // Flutter ajusta automáticamente
       appBar: AppBar(
-        title: Text('DongoChat'),
-        actions: const [DebugButton(), LogoutButton()],
+        title: Text('DongoChat v${appVersion}'),
+        actions: const [ThemeToggleButton(), DebugButton(), LogoutButton()],
       ),
       body: Column(
         children: [
@@ -257,8 +268,8 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             child:
                 messages.isEmpty
                     ? const Center(child: Text('No hay mensajes aún'))
-                    : ListView.builder(
-                      controller: _scrollController,
+                    : ScrollablePositionedList.builder(
+                      itemScrollController: _itemScrollController,
                       itemCount: messages.length,
                       itemBuilder: (context, index) {
                         final msg = messages[index];
@@ -268,6 +279,7 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                             cachedBubble.msg.message != msg.message) {
                           // Si no existe en la caché o el contenido ha cambiado, actualiza la caché
                           _bubbleCache[msg.id!] = MessageBubble(
+                            key: ValueKey(msg.id),
                             chat: chat,
                             msg: msg,
                             isMe: msg.sender == user?.id,
@@ -351,7 +363,8 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
-                        vertical: 16, // Aumentado de 10 a 16 para mejor centrado
+                        vertical:
+                            16, // Aumentado de 10 a 16 para mejor centrado
                       ),
                       isDense: true,
                       alignLabelWithHint: true,

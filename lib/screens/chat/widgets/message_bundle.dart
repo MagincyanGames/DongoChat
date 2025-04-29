@@ -1,4 +1,6 @@
 import 'package:dongo_chat/models/chat.dart';
+import 'package:dongo_chat/providers/UserProvider.dart';
+import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 import 'package:provider/provider.dart';
@@ -75,20 +77,35 @@ class _MessageBubbleState extends State<MessageBubble>
 
   // Add this method to build the quoted message UI
   Widget _buildQuotedMessage(Message originalMessage, ThemeData theme) {
-    print("Building quoted message: ${originalMessage.message}");
+    final chatTheme = theme.extension<ChatTheme>();
+    
+    // Determinar si el mensaje citado es mío (como usuario actual)
+    final isMyMessage = originalMessage.sender == context.watch<UserProvider>().user!.id;
+    
+    // Elegir el color del borde y fondo según quién es el autor del mensaje original
+    final borderColor = isMe
+        ? chatTheme?.myQuotedMessageBorderColor 
+        : chatTheme?.otherQuotedMessageBorderColor;
+        
+    final backgroundColor = isMyMessage
+        ? chatTheme?.myQuotedMessageBackgroundColor
+        : chatTheme?.otherQuotedMessageBackgroundColor;
+    
     return GestureDetector(
       onTap: () {
-        // Llamamos al callback sólo si existe
         widget.onQuotedTap?.call(originalMessage.id!);
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 4),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceVariant.withOpacity(0.7),
+          color: backgroundColor ?? theme.colorScheme.surfaceVariant.withOpacity(0.7),
           borderRadius: BorderRadius.circular(12),
           border: Border(
-            left: BorderSide(color: theme.colorScheme.primary, width: 3),
+            left: BorderSide(
+              color: borderColor ?? theme.colorScheme.primary, 
+              width: 3,
+            ),
           ),
         ),
         child: Column(
@@ -110,7 +127,8 @@ class _MessageBubbleState extends State<MessageBubble>
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
+                    color: borderColor ?? 
+                          theme.colorScheme.primary,
                   ),
                 );
               },
@@ -122,7 +140,8 @@ class _MessageBubbleState extends State<MessageBubble>
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
-                color: theme.colorScheme.onSurfaceVariant,
+                color: chatTheme?.quotedMessageTextColor ?? 
+                      theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -213,28 +232,19 @@ class _MessageBubbleState extends State<MessageBubble>
                 ),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient:
-                      isMe
-                          ? LinearGradient(
-                            colors: [
-                              Theme.of(context).colorScheme.primary,
-                              Theme.of(
-                                context,
-                              ).colorScheme.primary.withOpacity(0.7),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                          : LinearGradient(
-                            colors: [
-                              Theme.of(
-                                context,
-                              ).colorScheme.secondary.withOpacity(0.8),
-                              Theme.of(context).colorScheme.secondary,
-                            ],
-                            begin: Alignment.topRight,
-                            end: Alignment.bottomLeft,
-                          ),
+                  gradient: isMe
+                      ? LinearGradient(
+                          colors: Theme.of(context).extension<ChatTheme>()?.myMessageGradient ?? 
+                            [Colors.deepPurple, Colors.deepPurple.shade900],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : LinearGradient(
+                          colors: Theme.of(context).extension<ChatTheme>()?.otherMessageGradient ?? 
+                            [Colors.blue.shade900, Colors.blue.shade700],
+                          begin: Alignment.topRight,
+                          end: Alignment.bottomLeft,
+                        ),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(

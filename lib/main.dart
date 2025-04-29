@@ -1,28 +1,20 @@
 import 'package:dongo_chat/database/database_service.dart';
 import 'package:dongo_chat/database/db_managers.dart';
 import 'package:dongo_chat/models/user.dart';
+import 'package:dongo_chat/providers/ThemeProvider.dart';
 import 'package:dongo_chat/providers/UserProvider.dart';
 import 'package:dongo_chat/screens/chat/main_screen.dart';
 import 'package:dongo_chat/screens/login_screen.dart';
-// import 'package:firebase_core/firebase_core.dart';
-// import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Definición centralizada de la versión de la app
-const String appVersion = '0.6.1';
+const String appVersion = '0.7.1';
 
 final databaseService = DatabaseService();
 final navigatorKey = GlobalKey<NavigatorState>();
-
-// /// Handler global para mensajes en segundo plano
-// @pragma('vm:entry-point')
-// Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-//   // Inicializar Firebase nuevamente en isolate de background
-//   await Firebase.initializeApp();
-//   print('🔔 Mensaje en segundo plano: ${message.messageId}');
-// }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +46,7 @@ void main() async {
       providers: [
         Provider<DatabaseService>.value(value: databaseService),
         ChangeNotifierProvider<UserProvider>(create: (_) => UserProvider()),
+        ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
       ],
       child: const MainApp(),
     ),
@@ -68,38 +61,11 @@ class MainApp extends StatefulWidget {
 
 class _MainAppState extends State<MainApp> {
   late Future<User?> _initialUserFuture;
-  // late final FirebaseMessaging _messaging;
 
   @override
   void initState() {
     super.initState();
     _initialUserFuture = _restoreSession();
-
-    // Inicializar instancia de FirebaseMessaging
-    // _messaging = FirebaseMessaging.instance;
-
-    // 1. Listener: mensajes en primer plano
-    // FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    //   print('📥 Mensaje en foreground: ${message.notification?.title} - ${message.notification?.body}');
-    //   if (message.notification != null) {
-    //     // Mostrar SnackBar o alerta
-    //     ScaffoldMessenger.of(context).showSnackBar(
-    //       SnackBar(
-    //         content: Text(message.notification!.body ?? 'Nueva notificación'),
-    //       ),
-    //     );
-    //   }
-    // });
-
-    // // 2. Handler: app iniciada por notificación (app cerrada)
-    // FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
-    //   if (message != null) {
-    //     _handleMessageOpen(message);
-    //   }
-    // });
-
-    // // 3. Listener: app en background -> abierta por notificación
-    // FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpen);
   }
 
   Future<User?> _restoreSession() async {
@@ -121,20 +87,10 @@ class _MainAppState extends State<MainApp> {
     return null;
   }
 
-  // void _handleMessageOpen(RemoteMessage message) {
-  //   print('🚀 App abierta desde notificación con data: ${message.data}');
-  //   // Ejemplo: navegar a pantalla de chat si contiene campo 'chatId'
-  //   final chatId = message.data['chatId'];
-  //   if (chatId != null) {
-  //     navigatorKey.currentState?.pushNamed(
-  //       '/main',
-  //       arguments: {'chatId': chatId},
-  //     );
-  //   }
-  // }
-
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
     return FutureBuilder<User?>(
       future: _initialUserFuture,
       builder: (context, snap) {
@@ -162,7 +118,79 @@ class _MainAppState extends State<MainApp> {
               foregroundColor: Colors.white,
             ),
             iconTheme: const IconThemeData(color: Colors.white),
+            extensions: [
+              ChatTheme(
+                // Gradientes de mensaje
+                myMessageGradient: [
+                  Colors.deepPurple,
+                  Colors.deepPurple.shade700,
+                ],
+                otherMessageGradient: [
+                  Colors.blue.shade600,
+                  Colors.blue.shade800,
+                ],
+
+                // Mis mensajes citados (borde morado)
+                myQuotedMessageBorderColor: Colors.purple.shade300,
+                myQuotedMessageBackgroundColor: Colors.white,
+
+                // Mensajes de otros citados (borde azul)
+                otherQuotedMessageBorderColor: Colors.deepPurple.shade200,
+                otherQuotedMessageBackgroundColor: Colors.white.withAlpha(200),
+
+                // Colores de texto comunes
+                quotedMessageTextColor: Colors.grey.shade800,
+                quotedMessageNameColor: Colors.deepPurple.shade700,
+              ),
+            ],
           ),
+          darkTheme: ThemeData(
+            useMaterial3: false,
+            brightness: Brightness.dark,
+            primarySwatch: Colors.deepPurple,
+            colorScheme: ColorScheme.fromSwatch(
+              primarySwatch: Colors.deepPurple,
+              brightness: Brightness.dark,
+            ).copyWith(
+              secondary: Colors.blue.shade800,
+              onSecondary: const Color.fromARGB(255, 255, 255, 255),
+              background: Color.fromARGB(255, 0, 0, 0),
+              surface: Colors.grey[850],
+            ),
+            appBarTheme: AppBarTheme(
+              backgroundColor: Colors.grey[900],
+              foregroundColor: Colors.white,
+            ),
+            iconTheme: const IconThemeData(color: Colors.white),
+            cardColor: Colors.grey[850],
+            canvasColor: const Color.fromARGB(255, 27, 25, 34),
+            extensions: [
+              ChatTheme(
+                // Gradientes de mensaje
+                myMessageGradient: [
+                  Colors.deepPurple.shade600,
+                  Colors.deepPurple.shade900,
+                ],
+                otherMessageGradient: [
+                  Colors.blue.shade700,
+                  Colors.blue.shade900,
+                ],
+
+                // Mis mensajes citados (borde morado claro)
+                myQuotedMessageBorderColor: Colors.purple.shade300,
+                myQuotedMessageBackgroundColor: Colors.black.withAlpha(175),
+
+                // Mensajes de otros citados (borde azul)
+                otherQuotedMessageBorderColor: Colors.blue.shade200,
+                otherQuotedMessageBackgroundColor: Colors.black.withAlpha(100),
+
+                // Colores de texto comunes
+                quotedMessageTextColor: Colors.grey.shade300,
+                quotedMessageNameColor: Colors.deepPurple.shade300,
+              ),
+            ],
+          ),
+          themeMode: themeProvider.themeMode,
           navigatorKey: navigatorKey,
           routes: {
             '/login': (_) => const LoginScreen(),
