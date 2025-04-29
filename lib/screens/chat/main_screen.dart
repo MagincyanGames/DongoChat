@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io' show Platform;
+import 'package:flutter/services.dart';
 import 'package:dongo_chat/models/message.dart';
 import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
@@ -260,9 +262,12 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       itemCount: messages.length,
                       itemBuilder: (context, index) {
                         final msg = messages[index];
-                        return _bubbleCache.putIfAbsent(
-                          msg.id!,
-                          () => MessageBubble(
+                        final cachedBubble = _bubbleCache[msg.id!];
+
+                        if (cachedBubble == null ||
+                            cachedBubble.msg.message != msg.message) {
+                          // Si no existe en la caché o el contenido ha cambiado, actualiza la caché
+                          _bubbleCache[msg.id!] = MessageBubble(
                             chat: chat,
                             msg: msg,
                             isMe: msg.sender == user?.id,
@@ -273,8 +278,10 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                             onQuotedTap: (ObjectId targetId) {
                               scrollToMessage(targetId);
                             },
-                          ),
-                        );
+                          );
+                        }
+
+                        return _bubbleCache[msg.id!]!;
                       },
                     ),
           ),
@@ -300,20 +307,57 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           child: Row(
             children: [
               Expanded(
-                child: TextField(
-                  focusNode: _textFieldFocus,
-                  controller: _controller,
-                  decoration: InputDecoration(
-                    hintText:
-                        reply != null
-                            ? 'Responder a mensaje...'
-                            : 'Escribe un mensaje…',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
+                child: Focus(
+                  onKeyEvent: (FocusNode node, KeyEvent event) {
+                    // Solo aplicar en plataformas de escritorio (Windows, macOS, Linux)
+                    if (!Platform.isAndroid && !Platform.isIOS) {
+                      if (event is KeyDownEvent &&
+                          event.logicalKey == LogicalKeyboardKey.enter) {
+                        // Si shift está presionado, permitir nueva línea (comportamiento predeterminado)
+                        if (!HardwareKeyboard.instance.isShiftPressed) {
+                          // Si no hay shift, enviar mensaje
+                          _sendMessage(id);
+                          return KeyEventResult
+                              .handled; // Prevenir comportamiento predeterminado
+                        }
+                      }
+                    }
+                    return KeyEventResult
+                        .ignored; // Comportamiento normal en otros casos
+                  },
+                  child: TextFormField(
+                    focusNode: _textFieldFocus,
+                    controller: _controller,
+                    minLines: 1, // Mantiene 2 líneas mínimas
+                    maxLines: 5, // Permite hasta 5 líneas antes de scrollear
+                    keyboardType: TextInputType.multiline,
+                    textCapitalization: TextCapitalization.sentences,
+                    textAlignVertical: TextAlignVertical.center,
+                    expands:
+                        false, // Asegura que no se expanda más allá de lo necesario
+                    style: TextStyle(
+                      height: 1.5, // Aumentado para mejor distribución vertical
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: InputDecoration(
+                      hintText:
+                          reply != null
+                              ? 'Responder a mensaje...'
+                              : 'Escribe un mensaje…',
+                      hintStyle: TextStyle(
+                        height: 1.5, // Aumentado igual que el estilo principal
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16, // Aumentado de 10 a 16 para mejor centrado
+                      ),
+                      isDense: true,
+                      alignLabelWithHint: true,
+                      isCollapsed: false,
+                    ),
                   ),
-                  onSubmitted: (_) => _sendMessage(id),
                 ),
               ),
               const SizedBox(width: 8),

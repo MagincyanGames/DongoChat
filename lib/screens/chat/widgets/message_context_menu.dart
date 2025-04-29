@@ -16,10 +16,11 @@ void showMessageContextMenu({
   final primaryColor = theme.colorScheme.primary;
   final backgroundColor = theme.cardColor;
   final textColor = theme.textTheme.bodyMedium?.color ?? Colors.black;
-  
+
   // Calculate the position for the menu
-  final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-  
+  final RenderBox overlay =
+      Overlay.of(context).context.findRenderObject() as RenderBox;
+
   showMenu(
     context: context,
     elevation: 8,
@@ -31,15 +32,22 @@ void showMessageContextMenu({
     ),
     items: [
       PopupMenuItem(
+        value: 'reply',
+        child: Row(
+          children: [
+            Icon(Icons.reply, size: 20, color: primaryColor),
+            const SizedBox(width: 10),
+            Text('Responder', style: TextStyle(color: textColor)),
+          ],
+        ),
+      ),
+      PopupMenuItem(
         value: 'copy',
         child: Row(
           children: [
             Icon(Icons.copy, size: 20, color: primaryColor),
             const SizedBox(width: 10),
-            Text(
-              'Copiar mensaje',
-              style: TextStyle(color: textColor),
-            ),
+            Text('Copiar mensaje', style: TextStyle(color: textColor)),
           ],
         ),
       ),
@@ -51,36 +59,23 @@ void showMessageContextMenu({
               const Icon(Icons.delete, size: 20, color: Colors.red),
               const SizedBox(width: 10),
               Text(
-                'Eliminar mensaje', 
+                'Eliminar mensaje',
                 style: const TextStyle(color: Colors.red),
               ),
             ],
           ),
         ),
-      PopupMenuItem(
-        value: 'reply',
-        child: Row(
-          children: [
-            Icon(Icons.reply, size: 20, color: primaryColor),
-            const SizedBox(width: 10),
-            Text(
-              'Responder',
-              style: TextStyle(color: textColor),
-            ),
-          ],
-        ),
-      ),
     ],
   ).then((value) {
     // Handle menu item selection
     if (value == null) return;
-    
+
     switch (value) {
       case 'copy':
         // Copy message to clipboard
         final messageText = message.message;
         Clipboard.setData(ClipboardData(text: messageText));
-        
+
         break;
       case 'delete':
         // Handle delete action
@@ -88,7 +83,8 @@ void showMessageContextMenu({
         break;
       case 'reply':
         // Get the MainScreen state and set the reply
-        final mainScreenState = context.findAncestorStateOfType<MainScreenState>();
+        final mainScreenState =
+            context.findAncestorStateOfType<MainScreenState>();
         if (mainScreenState != null && message.id != null) {
           mainScreenState.setReplyMessage(message.id!);
         }
