@@ -1,23 +1,20 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
+import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
+import 'package:provider/provider.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:dongo_chat/database/db_managers.dart';
 import 'package:dongo_chat/models/chat.dart';
 import 'package:dongo_chat/models/message.dart';
 import 'package:dongo_chat/models/user.dart';
-import 'package:flutter/material.dart';
-import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:dongo_chat/screens/chat/widgets/message_bundle.dart';
 
 class ChatView extends StatefulWidget {
   final Chat chat;
   final User? currentUser;
-  final Future<void> Function(
-    String text,
-    ObjectId userId,
-    MessageData? messageData,
-  )
-  onSendMessage;
+  final Future<void> Function(String text, ObjectId userId, MessageData? messageData) onSendMessage;
   final Future<bool> Function() onRefreshMessages;
   final Future<void> Function(ObjectId messageId)? onDeleteMessage;
   final VoidCallback? onChatInitialized;
@@ -42,56 +39,52 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _textFieldFocus = FocusNode();
   final ItemScrollController _itemScrollController = ItemScrollController();
-  final ItemPositionsListener _itemPositionsListener =
-      ItemPositionsListener.create();
+  final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
 
+  // Caching maps
+  final Map<ObjectId, User> _userCache = {};
+  final Map<ObjectId, Message> _quotedCache = {};
+  
   Timer? _refreshTimer;
   bool _isLoading = false;
   ObjectId? reply;
   ObjectId? _highlightedMessageId;
-  final Map<ObjectId, MessageBubble> _bubbleCache = {};
   bool _showScrollButton = false;
+  bool _initialLoadDone = false;
 
   @override
   void initState() {
     super.initState();
-
-    print("ChatViewState initState");
-
     WidgetsBinding.instance.addObserver(this);
 
-    // Mejorar el detector de posición para mostrar/ocultar el botón
+    // Scroll button visibility listener
     _itemPositionsListener.itemPositions.addListener(() {
       if (!mounted) return;
 
       final positions = _itemPositionsListener.itemPositions.value;
       if (positions.isNotEmpty) {
-        // Verificar si el primer elemento (índice 0) está visible
-        // lo que significa que estamos en el fondo
         bool isAtBottom = false;
-
         for (final position in positions) {
           if (position.index == 0) {
             isAtBottom = true;
             break;
           }
         }
-
-        // Sólo mostrar botón si NO estamos en el fondo
         final shouldShow = !isAtBottom;
-
         if (_showScrollButton != shouldShow) {
-          setState(() {
-            _showScrollButton = shouldShow;
-          });
+          setState(() => _showScrollButton = shouldShow);
         }
       }
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startRefreshTimer();
-      _scrollToBottom();
-      _textFieldFocus.requestFocus();
+      _prefetchMetadata().then((_) {
+        setState(() => _initialLoadDone = true);
+        _startRefreshTimer();
+        _scrollToBottom();
+        _textFieldFocus.requestFocus();
+        widget.onChatInitialized?.call();
+      });
     });
   }
 
@@ -103,37 +96,94 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
 
   Future<void> _refreshMessages() async {
     if (!mounted) return;
+    
     final hasNewMessages = await widget.onRefreshMessages();
-    if (hasNewMessages && mounted) setState(() {});
+    
+    // Always refresh the metadata to ensure quotes are up to date
+    await _prefetchMetadata();
+    
+    if (hasNewMessages || reply != null) {
+      if (mounted) setState(() {});
+    }
   }
 
-  // Método principal para scroll a la parte inferior
+  Future<void> _prefetchMetadata() async {
+    final userMgr = DBManagers.user;
+    final msgs = widget.chat.messages;
+    
+    try {
+      // First, collect all the needed IDs
+      final Set<ObjectId> neededUsers = {};
+      final Set<ObjectId> neededQuotes = {};
+      
+      for (final msg in msgs) {
+        if (msg.sender != null) {
+          neededUsers.add(msg.sender!);
+        }
+        
+        // Ensure we get all quoted messages
+        if (msg.data?.resend != null) {
+          neededQuotes.add(msg.data!.resend!);
+        }
+      }
+      
+      // Prefetch users not in cache
+      final usersToFetch = neededUsers.where((id) => !_userCache.containsKey(id)).toList();
+      for (final userId in usersToFetch) {
+        try {
+          final user = await userMgr.findById(userId);
+          if (user != null) _userCache[userId] = user;
+        } catch (e) {
+          print('Error fetching user $userId: $e');
+        }
+      }
+      
+      // Prefetch quoted messages not in cache
+      final quotesToFetch = neededQuotes.where((id) => !_quotedCache.containsKey(id)).toList();
+      
+      // Log for debugging
+      if (quotesToFetch.isNotEmpty) {
+        print('Fetching ${quotesToFetch.length} quoted messages');
+      }
+      
+      for (final quoteId in quotesToFetch) {
+        try {
+          final quote = await widget.chat.findMessageById(quoteId);
+          if (quote != null) {
+            _quotedCache[quoteId] = quote;
+            print('Cached quoted message: ${quote.id}');
+          } else {
+            print('Failed to find quoted message: $quoteId');
+          }
+        } catch (e) {
+          print('Error fetching quoted message $quoteId: $e');
+        }
+      }
+    } catch (e) {
+      print('Error in prefetch metadata: $e');
+    }
+  }
+
   void _scrollToBottom() {
     if (!_itemScrollController.isAttached) return;
 
     try {
-      // Para listas con reverse: true, el índice 0 es el mensaje más reciente
       _itemScrollController.scrollTo(
         index: 0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-        alignment: 0.0, // Esto fuerza alineación en la parte visible
+        alignment: 0.0,
       );
 
-      // Limpia el resaltado después de un tiempo
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) setState(() => _highlightedMessageId = null);
       });
     } catch (e) {
-      print('Error en scrollToBottom: $e');
+      print('Error in scrollToBottom: $e');
     }
   }
 
-  // Método para asegurar que el campo de entrada es visible
-  void _ensureInputIsVisible() {
-    // Usar el mismo método _scrollToBottom para consistencia
-    _scrollToBottom();
-  }
+  void _ensureInputIsVisible() => _scrollToBottom();
 
   @override
   void didChangeMetrics() {
@@ -148,45 +198,37 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
-    // Limpiar el campo de texto inmediatamente para mejor UX
     _controller.clear();
-
-    // Actualizar estado a "cargando"
     setState(() => _isLoading = true);
 
-    // Preparar datos de respuesta si existen
-    MessageData? messageData =
-        reply != null ? MessageData(resend: reply) : null;
-
-    // Limpiar estado de respuesta
+    MessageData? messageData = reply != null ? MessageData(resend: reply) : null;
+    
+    // Pre-cache the quoted message before sending
+    if (reply != null && !_quotedCache.containsKey(reply)) {
+      final quotedMessage = await widget.chat.findMessageById(reply!);
+      if (quotedMessage != null) {
+        _quotedCache[reply!] = quotedMessage;
+      }
+    }
+    
     setState(() => reply = null);
 
     try {
-      // Enviar mensaje
       await widget.onSendMessage(
         text,
         widget.currentUser?.id ?? ObjectId(),
         messageData,
       );
-
-      // Después de enviar con éxito, hacer scroll
-      if (mounted) {
-        // Usamos microtask para asegurar que la UI se actualice primero
-        Future.microtask(() {
-          // Añadimos PostFrameCallback para garantizar que el widget tree
-          // está completamente actualizado antes de hacer scroll
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _scrollToBottom();
-          });
-        });
-      }
+      
+      // Force a metadata refresh to ensure quotes are cached
+      await _prefetchMetadata();
+      
+      _scrollToBottom();
     } catch (e) {
-      // Manejar error si ocurre
       if (mounted) {
         _showSnackbar('Error al enviar mensaje: ${e.toString()}');
       }
     } finally {
-      // Actualizar estado y devolver foco al campo de texto
       if (mounted) {
         setState(() => _isLoading = false);
         _textFieldFocus.requestFocus();
@@ -197,9 +239,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   void setReplyMessage(ObjectId messageId) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        setState(() {
-          reply = messageId;
-        });
+        setState(() => reply = messageId);
         Future.delayed(const Duration(milliseconds: 50), () {
           if (mounted) {
             _textFieldFocus.requestFocus();
@@ -221,14 +261,15 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
           index: reversedIndex,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
+          alignment: 0.5,
         );
-        setState(() {
-          _highlightedMessageId = messageId;
-        });
-        Future.delayed(const Duration(seconds: 2), () {
+        setState(() => _highlightedMessageId = messageId);
+        Future.delayed(const Duration(seconds: 1), () {
           if (mounted) setState(() => _highlightedMessageId = null);
         });
-      } catch (_) {}
+      } catch (e) {
+        print('Error scrolling to message: $e');
+      }
     }
   }
 
@@ -246,81 +287,72 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     final messages = widget.chat.messages;
     final user = widget.currentUser;
 
-    return Stack(
-      children: [
-        Column(
-          children: [
-            Expanded(
-              child:
-                  messages.isEmpty
-                      ? const Center(child: Text('No hay mensajes aún'))
-                      : ScrollablePositionedList.builder(
-                        // Solo reconstruir la lista cuando cambia su longitud
-                        key: ValueKey('chat-list'),
+    if (!_initialLoadDone) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Provider.value(
+      value: _userCache,
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              Expanded(
+                child: messages.isEmpty
+                    ? const Center(child: Text('No hay mensajes aún'))
+                    : ScrollablePositionedList.builder(
+                        key: const PageStorageKey('chat-list'),
                         itemScrollController: _itemScrollController,
                         itemPositionsListener: _itemPositionsListener,
                         itemCount: messages.length,
                         reverse: true,
                         padding: const EdgeInsets.all(8),
-                        addAutomaticKeepAlives: true,
+                        addAutomaticKeepAlives: false,
                         minCacheExtent: 2000,
                         itemBuilder: (context, index) {
                           final actualIndex = messages.length - 1 - index;
                           final msg = messages[actualIndex];
-
-                          // Usar el ID como llave única constante
                           final msgId = msg.id!;
-
-                          // Verificar si necesitamos reconstruir la burbuja
-                          final cachedBubble = _bubbleCache[msgId];
-                          final shouldRebuild =
-                              cachedBubble == null ||
-                              cachedBubble.msg.message != msg.message;
-
-                          if (shouldRebuild) {
-                            // Solo reconstruir si realmente es necesario
-                            print("rebubble for '$msgId'");
-                            _bubbleCache[msgId] =  MessageBubble(
-                              key: ValueKey(msgId),
-                              chat: widget.chat,
-                              msg: msg,
-                              isHighlighted: _highlightedMessageId == msgId,
-                              isMe: msg.sender == user?.id,
-                              isConsecutive:
-                                  actualIndex > 0 &&
-                                  messages[actualIndex].sender ==
-                                      messages[actualIndex - 1].sender,
-                              onQuotedTap: (ObjectId targetId) {
-                                scrollToMessage(targetId);
-                              },
-                              onReply: (ObjectId messageId) {
-                                setReplyMessage(messageId);
-                              },
-                              onShowSnackbar: (String message) {
-                                _showSnackbar(message);
-                              },
-                            );
-                          }
-
-                          return _bubbleCache[msgId]!;
+                          
+                          // Check if this message is consecutive
+                          final isConsecutive = actualIndex > 0 && 
+                              messages[actualIndex].sender == messages[actualIndex - 1].sender;
+                          
+                          // Get quoted message if available
+                          final quoted = msg.data?.resend != null 
+                              ? (_quotedCache[msg.data!.resend!] ?? 
+                                 Message(id: msg.data!.resend, message: "Cargando mensaje...", iv: ""))
+                              : null;
+                          
+                          return MessageBubble(
+                            key: ValueKey(msgId),
+                            msg: msg,
+                            me: user?.id ?? ObjectId(),
+                            user: _userCache[msg.sender],
+                            quoted: quoted,
+                            isConsecutive: isConsecutive,
+                            isHighlighted: _highlightedMessageId == msgId,
+                            onQuotedTap: scrollToMessage,
+                            onReply: setReplyMessage,
+                            onShowSnackbar: _showSnackbar,
+                          );
                         },
                       ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: _buildMessageInput(),
-            ),
-          ],
-        ),
-        Positioned(
-          right: 16,
-          bottom: 80,
-          child: AnimatedOpacity(
-            opacity: _showScrollButton ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 200),
-            child:
-                _showScrollButton
-                    ? FloatingActionButton(
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: _buildMessageInput(),
+              ),
+            ],
+          ),
+          Positioned(
+            right: 16,
+            bottom: 80,
+            child: AnimatedOpacity(
+              opacity: _showScrollButton ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: _showScrollButton
+                  ? FloatingActionButton(
                       mini: true,
                       backgroundColor: Theme.of(context).primaryColor,
                       foregroundColor: Colors.white,
@@ -328,10 +360,11 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                       onPressed: _scrollToBottom,
                       child: const Icon(Icons.keyboard_arrow_down),
                     )
-                    : const SizedBox.shrink(),
+                  : const SizedBox.shrink(),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -499,7 +532,6 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   void _showSnackbar(String message) {
     if (!mounted) return;
 
-    // Usar addPostFrameCallback para asegurar que el contexto sea válido
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final messenger = ScaffoldMessenger.of(context);

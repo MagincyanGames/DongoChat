@@ -9,6 +9,7 @@ import 'package:dongo_chat/screens/chat/widgets/chat_view.dart';
 import 'package:dongo_chat/screens/chat/widgets/loadding_screen.dart';
 import 'package:dongo_chat/screens/chat/widgets/logout_button.dart';
 import 'package:dongo_chat/screens/debug/debug_button.dart';
+import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:dongo_chat/widgets/theme_toggle_button.dart';
 import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
@@ -108,6 +109,22 @@ class MainScreenState extends State<MainScreen> {
       appBar: AppBar(
         title: Text('DongoChat v${appVersion}'),
         actions: const [ThemeToggleButton(), DebugButton(), LogoutButton()],
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ?? 
+                  Colors.blue.shade900,
+                Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ?? 
+                  Colors.deepPurple.shade900,
+              ],
+            ),
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
       ),
       body: ChatView(
         key: _chatViewKey,

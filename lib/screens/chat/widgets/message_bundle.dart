@@ -1,338 +1,267 @@
-import 'package:dongo_chat/models/chat.dart';
-import 'package:dongo_chat/providers/UserProvider.dart';
-import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 import 'package:provider/provider.dart';
-import 'package:dongo_chat/database/database_service.dart';
-import 'package:dongo_chat/database/db_managers.dart';
-import 'package:dongo_chat/database/managers/chat_manager.dart';
-import 'package:dongo_chat/database/managers/database_manager.dart';
-import 'package:dongo_chat/database/managers/user_manager.dart';
+import 'package:dongo_chat/models/chat.dart';
 import 'package:dongo_chat/models/message.dart';
 import 'package:dongo_chat/models/user.dart';
+import 'package:dongo_chat/providers/UserProvider.dart';
+import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:dongo_chat/utils/time_ago.dart';
-import 'package:dongo_chat/screens/chat/widgets/message_context_menu.dart'; // Import the context menu
+import 'package:dongo_chat/screens/chat/widgets/message_context_menu.dart';
 
-class MessageBubble extends StatefulWidget {
-  final Chat chat;
+class MessageBubble extends StatelessWidget {
   final Message msg;
-  final bool isMe;
+  final ObjectId me;
+  final User? user;
+  final Message? quoted;
   final bool isConsecutive;
-  final bool isHighlighted; // Nueva propiedad
-  final Function(ObjectId targetMessageId) onQuotedTap;
-  final Function(ObjectId messageId) onReply;
-  final Function(String message)? onShowSnackbar; // Nuevo callback
+  final bool isHighlighted;
+  final Function(ObjectId) onQuotedTap;
+  final Function(ObjectId) onReply;
+  final Function(String)? onShowSnackbar;
 
   const MessageBubble({
     Key? key,
-    required this.chat,
     required this.msg,
-    required this.isMe,
-    required this.isConsecutive,
-    this.isHighlighted = false, // Valor predeterminado
+    required this.me,
+    this.user,
+    this.quoted,
+    this.isConsecutive = false,
+    this.isHighlighted = false,
     required this.onQuotedTap,
     required this.onReply,
     this.onShowSnackbar,
   }) : super(key: key);
 
-  @override
-  _MessageBubbleState createState() => _MessageBubbleState();
-}
-
-class _MessageBubbleState extends State<MessageBubble>
-    with AutomaticKeepAliveClientMixin {
-  late final Future<User?> _futureUser;
-  late Future<Message?> _originalMessageFuture = Future.value(null);
-  late bool isMe;
-  late bool isConsecutive;
-  late Message msg;
-  late Chat chat;
-
-  @override
-  void initState() {
-    super.initState();
-    final userManager = DBManagers.user;
-    _futureUser = userManager.findById(widget.msg.sender);
-    isMe = widget.isMe;
-    isConsecutive = widget.isConsecutive;
-    msg = widget.msg;
-    chat = widget.chat;
-
-    // Load referenced message if this is a reply
-    if (msg.data?.resend != null) {
-      _originalMessageFuture = chat.findMessageById(msg.data!.resend!);
-    }
-  }
-
-  @override
-  bool get wantKeepAlive => true; // Para que el State no se descarte
+  bool get isMe => msg.sender == me;
 
   void _showContextMenu(BuildContext context, Offset tapPosition) {
     showMessageContextMenu(
       context: context,
       position: tapPosition,
-      message: widget.msg,
-      isMe: widget.isMe,
-      onReply: widget.onReply,
-      onShowSnackbar: widget.onShowSnackbar, // Pasando el callback
+      message: msg,
+      isMe: isMe,
+      onReply: onReply,
+      onShowSnackbar: onShowSnackbar,
     );
   }
 
-  // Add this method to build the quoted message UI
-  Widget _buildQuotedMessage(Message originalMessage, ThemeData theme) {
-    final chatTheme = theme.extension<ChatTheme>();
-
-    // Determinar si el mensaje citado es mío (como usuario actual)
-    final isMyMessage =
-        originalMessage.sender == context.watch<UserProvider>().user!.id;
-
-    // Elegir el color del borde y fondo según quién es el autor del mensaje original
-    final borderColor =
-        isMe
-            ? chatTheme?.myQuotedMessageBorderColor
-            : chatTheme?.otherQuotedMessageBorderColor;
-
-    final backgroundColor =
-        isMyMessage
-            ? chatTheme?.myQuotedMessageBackgroundColor
-            : chatTheme?.otherQuotedMessageBackgroundColor;
-
-    return GestureDetector(
-      onTap: () {
-        widget.onQuotedTap.call(originalMessage.id!);
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color:
-              backgroundColor ??
-              theme.colorScheme.surfaceVariant.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(12),
-          border: Border(
-            left: BorderSide(
-              color: borderColor ?? theme.colorScheme.primary,
-              width: 3,
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    // Create the message content container
+    final messageContainer = Container(
+      margin: const EdgeInsets.only(
+        left: 8,
+        right: 8,
+        top: 2,
+        bottom: 2,
+      ),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: isMe
+            ? LinearGradient(
+                colors: theme.extension<ChatTheme>()?.myMessageGradient ??
+                    [Colors.deepPurple, Colors.deepPurple.shade900],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : LinearGradient(
+                colors: theme.extension<ChatTheme>()?.otherMessageGradient ??
+                    [Colors.blue.shade900, Colors.blue.shade700],
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+              ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (quoted != null) _buildQuotedMessage(quoted!, theme),
+          Text(
+            msg.message,
+            style: TextStyle(
+              color: isMe
+                  ? theme.colorScheme.onPrimary
+                  : theme.colorScheme.onSecondary,
             ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            FutureBuilder<User?>(
-              future: DBManagers.user.findById(originalMessage.sender),
-              builder: (context, snapshot) {
-                String userName = 'Desconocido';
-
-                if (snapshot.connectionState == ConnectionState.done &&
-                    snapshot.hasData &&
-                    snapshot.data != null) {
-                  userName = snapshot.data!.displayName;
-                }
-
-                return Text(
-                  userName,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: borderColor ?? theme.colorScheme.primary,
-                  ),
-                );
-              },
+          if (!isConsecutive) const SizedBox(height: 4),
+          Text(
+            _getFormattedTime(msg.timestamp!),
+            style: TextStyle(
+              fontSize: 10,
+              fontStyle: FontStyle.italic,
+              color: isMe
+                  ? theme.colorScheme.onPrimary.withOpacity(0.5)
+                  : theme.colorScheme.onSecondary.withOpacity(0.5),
             ),
-            const SizedBox(height: 2),
-            Text(
-              originalMessage.message,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+
+    // Create the full message widget with username if needed
+    final messageContent = Column(
+      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        if (!isConsecutive && user != null)
+          Container(
+            margin: EdgeInsets.only(
+              left: 8,
+              right: 8,
+              top: 16,
+              bottom: 0,
+            ),
+            padding: EdgeInsets.only(
+              left: isMe ? 0 : 10,
+              right: isMe ? 10 : 0,
+              bottom: 0,
+            ),
+            child: Text(
+              user?.displayName ?? 'Desconocido',
               style: TextStyle(
                 fontSize: 12,
-                color:
-                    chatTheme?.quotedMessageTextColor ??
-                    theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.bold,
+                color: theme.textTheme.bodySmall?.color,
               ),
             ),
-          ],
-        ),
+          ),
+        // Apply the highlight effect only to the message container
+        if (isHighlighted) 
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOutBack,
+            builder: (context, value, child) {
+              return Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.3 * value),
+                      blurRadius: 8 * value,
+                      spreadRadius: 2 * value,
+                    ),
+                  ],
+                ),
+                child: Transform.scale(
+                  scale: 1.0 + (0.05 * value),
+                  child: child,
+                ),
+              );
+            },
+            child: messageContainer,
+          )
+        else
+          messageContainer,
+      ],
+    );
+
+    // Wrap with gesture detector and alignment
+    return GestureDetector(
+      onSecondaryTapUp: (details) {
+        _showContextMenu(context, details.globalPosition);
+      },
+      onLongPress: () {
+        final RenderBox renderBox = context.findRenderObject() as RenderBox;
+        final position = renderBox.localToGlobal(Offset.zero);
+        final size = renderBox.size;
+        final tapPosition = Offset(
+          position.dx + size.width / 2,
+          position.dy + size.height / 2,
+        );
+        _showContextMenu(context, tapPosition);
+      },
+      child: Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: messageContent,
       ),
     );
   }
 
-  Widget futureBuilder(BuildContext context, AsyncSnapshot<User?> snapshot) {
-    if (snapshot.connectionState == ConnectionState.waiting) {
-      return Align(
-        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceVariant,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    } else if (snapshot.hasError) {
-      return Text('Error: ${snapshot.error}');
-    } else {
-      final user = snapshot.data;
-      final theme = Theme.of(context);
+  Widget _buildQuotedMessage(Message originalMessage, ThemeData theme) {
+    final chatTheme = theme.extension<ChatTheme>();
+    
+    return Builder(builder: (context) {
+      final isMyMessage = originalMessage.sender == me;
 
-      // Wrap with GestureDetector to detect right-click and long press
+      // Choose border and background colors based on who is the author
+      final borderColor = isMe
+          ? chatTheme?.myQuotedMessageBorderColor
+          : chatTheme?.otherQuotedMessageBorderColor;
+
+      final backgroundColor = isMyMessage
+          ? chatTheme?.myQuotedMessageBackgroundColor
+          : chatTheme?.otherQuotedMessageBackgroundColor;
+
       return GestureDetector(
-        // Keep right-click for desktop/web
-        onSecondaryTapUp: (details) {
-          _showContextMenu(context, details.globalPosition);
+        onTap: () {
+          onQuotedTap(originalMessage.id!);
         },
-        // Add long press for mobile devices
-        onLongPress: () {
-          // Get the position for the context menu
-          final RenderBox renderBox = context.findRenderObject() as RenderBox;
-          final position = renderBox.localToGlobal(Offset.zero);
-          final size = renderBox.size;
-
-          // Position the menu near the center of the message bubble
-          final tapPosition = Offset(
-            position.dx + size.width / 2,
-            position.dy + size.height / 2,
-          );
-
-          _showContextMenu(context, tapPosition);
-        },
-        child: Align(
-          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: backgroundColor ?? theme.colorScheme.surfaceVariant.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(12),
+            border: Border(
+              left: BorderSide(
+                color: borderColor ?? theme.colorScheme.primary,
+                width: 3,
+              ),
+            ),
+          ),
           child: Column(
-            crossAxisAlignment:
-                isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (!isConsecutive)
-                Container(
-                  margin: EdgeInsets.only(
-                    left: 8,
-                    right: 8,
-                    top: 16,
-                    bottom: 0,
-                  ),
-                  padding: EdgeInsets.only(
-                    left: isMe ? 0 : 10,
-                    right: isMe ? 10 : 0,
-                    bottom: 0,
-                  ),
-                  child: Text(
-                    user != null ? user.displayName : 'Desconocido',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).textTheme.bodySmall?.color,
-                    ),
-                  ),
+              Text(
+                Provider.of<Map<ObjectId, User>>(context, listen: false)[originalMessage.sender]?.displayName ?? 'Desconocido',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: borderColor ?? theme.colorScheme.primary,
                 ),
-              Container(
-                margin: const EdgeInsets.only(
-                  left: 8,
-                  right: 8,
-                  top: 2,
-                  bottom: 2,
-                ),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient:
-                      isMe
-                          ? LinearGradient(
-                            colors:
-                                Theme.of(
-                                  context,
-                                ).extension<ChatTheme>()?.myMessageGradient ??
-                                [Colors.deepPurple, Colors.deepPurple.shade900],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                          : LinearGradient(
-                            colors:
-                                Theme.of(context)
-                                    .extension<ChatTheme>()
-                                    ?.otherMessageGradient ??
-                                [Colors.blue.shade900, Colors.blue.shade700],
-                            begin: Alignment.topRight,
-                            end: Alignment.bottomLeft,
-                          ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Add the quoted message if this is a reply
-                    if (msg.data?.resend != null)
-                      FutureBuilder<Message?>(
-                        future: _originalMessageFuture,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return Container(
-                              height: 40,
-                              width: 100,
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surfaceVariant
-                                    .withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            );
-                          }
-
-                          if (snapshot.hasData && snapshot.data != null) {
-                            return _buildQuotedMessage(snapshot.data!, theme);
-                          }
-
-                          return const SizedBox.shrink();
-                        },
-                      ),
-
-                    Text(
-                      msg.message,
-                      style: TextStyle(
-                        color:
-                            isMe
-                                ? Theme.of(context).colorScheme.onPrimary
-                                : Theme.of(context).colorScheme.onSecondary,
-                      ),
-                    ),
-                    if (!isConsecutive) const SizedBox(height: 4),
-                    Text(
-                      TimeAgo.getTimeAgo(msg.timestamp!),
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontStyle: FontStyle.italic,
-                        color:
-                            isMe
-                                ? Theme.of(
-                                  context,
-                                ).colorScheme.onPrimary.withOpacity(0.5)
-                                : Theme.of(
-                                  context,
-                                ).colorScheme.onSecondary.withOpacity(0.5),
-                      ),
-                    ),
-                  ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                originalMessage.message,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: chatTheme?.quotedMessageTextColor ?? theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
           ),
         ),
       );
+    });
+  }
+
+  String _getFormattedTime(DateTime timestamp) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(timestamp.year, timestamp.month, timestamp.day);
+    
+    // If the message is from today
+    if (messageDate.isAtSameMomentAs(today)) {
+      return TimeAgo.getTimeAgo(timestamp);
+    } 
+    // If the message is from yesterday or earlier
+    else {
+      // Format the date and time
+      final hours = timestamp.hour.toString().padLeft(2, '0');
+      final minutes = timestamp.minute.toString().padLeft(2, '0');
+      
+      // If it's from this year, don't show the year
+      if (timestamp.year == now.year) {
+        return '${timestamp.day}/${timestamp.month} $hours:$minutes';
+      } else {
+        return '${timestamp.day}/${timestamp.month}/${timestamp.year} $hours:$minutes';
+      }
     }
   }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    print("build message bubble ${msg.id}");
-    return FutureBuilder<User?>(future: _futureUser, builder: futureBuilder);
-  }
-
-  
 }
