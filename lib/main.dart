@@ -11,7 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Definición centralizada de la versión de la app
-const String appVersion = '0.5.0';
+const String appVersion = '0.5.2';
 
 final databaseService = DatabaseService();
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -42,12 +42,7 @@ void main() async {
   // print('Permisos de notificación: ${settings.authorizationStatus}');
 
   // Cargar el servidor seleccionado
-  final isUsingLocal = await databaseService.loadSelectedServer();
-  final connectionString = isUsingLocal
-      ? 'mongodb://play.onara.top:27017/WeLearning'
-      : 'mongodb+srv://onara:AduLHQ6icblTnfCV@onaradb.5vdzp.mongodb.net/?retryWrites=true&w=majority&appName=onaradb/DongoChat';
-
-  final isConnected = await databaseService.connectToDatabase(connectionString);
+  final isConnected = await databaseService.connectToPreferences();
   print(
     isConnected
         ? 'Conexión a la base de datos exitosa'

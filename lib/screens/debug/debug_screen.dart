@@ -26,7 +26,7 @@ class _DebugScreenState extends State<DebugScreen> {
   bool _isLoading = false;
 
   final String _localConnectionString =
-      'mongodb://play.onara.top:27017/WeLearning';
+      'mongodb://play.onara.top:27017/DongoChat';
   final String _onlineConnectionString =
       'mongodb+srv://onara:AduLHQ6icblTnfCV@onaradb.5vdzp.mongodb.net/?retryWrites=true&w=majority&appName=onaradb/DongoChat';
   bool _isUsingLocalConnection = true; // Track which connection is active
@@ -182,7 +182,7 @@ class _DebugScreenState extends State<DebugScreen> {
       _isUsingLocalConnection = true;
       _selectedProtocol = 'mongodb://';
       _hostController.text = 'play.onara.top:27017';
-      _databaseNameController.text = 'WeLearning';
+      _databaseNameController.text = 'DongoChat';
     });
 
     // Guardar la selección del servidor

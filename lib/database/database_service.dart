@@ -7,11 +7,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 class DatabaseService {
   late Db db;
   bool isConnected = false;
-  String _connectionString = 'mongodb+srv://onara:AduLHQ6icblTnfCV@onaradb.5vdzp.mongodb.net/?retryWrites=true&w=majority&appName=onaradb/DongoChat';
+  String _connectionString =
+      'mongodb+srv://onara:AduLHQ6icblTnfCV@onaradb.5vdzp.mongodb.net/?retryWrites=true&w=majority&appName=onaradb/DongoChat';
   // String _connectionString = 'mongodb://play.onara.top:27017/WeLearning';
   Timer? _keepAliveTimer;
 
-  static const String _serverKey = 'selected_server'; // Key for SharedPreferences
+  static const String _serverKey =
+      'selected_server'; // Key for SharedPreferences
 
   String get connectionString => _connectionString;
 
@@ -23,6 +25,11 @@ class DatabaseService {
   Future<bool> loadSelectedServer() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_serverKey) ?? true; // Default to local server
+  }
+  Future<bool> connectToPreferences() async {
+    return await connectToDatabase(await loadSelectedServer()
+        ? 'mongodb://play.onara.top:27017/DongoChat'
+        : 'mongodb://play.onara.top:27017/DongoChat');
   }
 
   Future<bool> connectToDatabase([String? customUrl]) async {
