@@ -65,11 +65,29 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     // });
   }
 
+  void _scrollToBottomAfterKeyboardOpens() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      var messages = _chatManager.getGeneralChat().messages;
+
+      final lastIndex = messages.length - 1;
+      if (_itemScrollController.isAttached && lastIndex >= 0) {
+        _itemScrollController.scrollTo(
+          index: lastIndex,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          alignment: 1.0,
+        );
+      }
+    });
+  }
+
   @override
   void didChangeMetrics() {
-    // Paso 3: Manejar cambios de teclado
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    if (bottomInset > 0) {
+      _scrollToBottomAfterKeyboardOpens();
+    }
     super.didChangeMetrics();
-    _scrollToBottomWithDelay();
   }
 
   void _scrollToBottomInstant() {
