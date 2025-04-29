@@ -19,20 +19,22 @@ class MessageBubble extends StatefulWidget {
   final Message msg;
   final bool isMe;
   final bool isConsecutive;
-  final void Function(ObjectId targetMessageId) onQuotedTap;
-  final void Function(ObjectId messageId) onReply; // Nuevo
-  final void Function(ObjectId messageId)? onDelete; // Nuevo, opcional
+  final bool isHighlighted; // Nueva propiedad
+  final Function(ObjectId targetMessageId) onQuotedTap;
+  final Function(ObjectId messageId) onReply;
+  final Function(String message)? onShowSnackbar; // Nuevo callback
 
   const MessageBubble({
-    super.key,
+    Key? key,
     required this.chat,
     required this.msg,
     required this.isMe,
-    this.isConsecutive = false,
+    required this.isConsecutive,
+    this.isHighlighted = false, // Valor predeterminado
     required this.onQuotedTap,
     required this.onReply,
-    this.onDelete,
-  });
+    this.onShowSnackbar,
+  }) : super(key: key);
 
   @override
   _MessageBubbleState createState() => _MessageBubbleState();
@@ -50,7 +52,6 @@ class _MessageBubbleState extends State<MessageBubble>
   @override
   void initState() {
     super.initState();
-    print("Initializing MessageBubble for message: ${widget.msg.message}");
     final userManager = DBManagers.user;
     _futureUser = userManager.findById(widget.msg.sender);
     isMe = widget.isMe;
@@ -60,7 +61,6 @@ class _MessageBubbleState extends State<MessageBubble>
 
     // Load referenced message if this is a reply
     if (msg.data?.resend != null) {
-      print("Loading original message: ${msg.data!.resend}");
       _originalMessageFuture = chat.findMessageById(msg.data!.resend!);
     }
   }
@@ -68,15 +68,14 @@ class _MessageBubbleState extends State<MessageBubble>
   @override
   bool get wantKeepAlive => true; // Para que el State no se descarte
 
-  void _showContextMenu(BuildContext context, Offset position, User? user) {
+  void _showContextMenu(BuildContext context, Offset tapPosition) {
     showMessageContextMenu(
       context: context,
-      position: position,
+      position: tapPosition,
       message: widget.msg,
       isMe: widget.isMe,
-      user: user,
       onReply: widget.onReply,
-      onDelete: widget.onDelete,
+      onShowSnackbar: widget.onShowSnackbar, // Pasando el callback
     );
   }
 
@@ -89,13 +88,15 @@ class _MessageBubbleState extends State<MessageBubble>
         originalMessage.sender == context.watch<UserProvider>().user!.id;
 
     // Elegir el color del borde y fondo según quién es el autor del mensaje original
-    final borderColor = isMe
-        ? chatTheme?.myQuotedMessageBorderColor
-        : chatTheme?.otherQuotedMessageBorderColor;
+    final borderColor =
+        isMe
+            ? chatTheme?.myQuotedMessageBorderColor
+            : chatTheme?.otherQuotedMessageBorderColor;
 
-    final backgroundColor = isMyMessage
-        ? chatTheme?.myQuotedMessageBackgroundColor
-        : chatTheme?.otherQuotedMessageBackgroundColor;
+    final backgroundColor =
+        isMyMessage
+            ? chatTheme?.myQuotedMessageBackgroundColor
+            : chatTheme?.otherQuotedMessageBackgroundColor;
 
     return GestureDetector(
       onTap: () {
@@ -105,7 +106,8 @@ class _MessageBubbleState extends State<MessageBubble>
         margin: const EdgeInsets.only(bottom: 4),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: backgroundColor ??
+          color:
+              backgroundColor ??
               theme.colorScheme.surfaceVariant.withOpacity(0.7),
           borderRadius: BorderRadius.circular(12),
           border: Border(
@@ -146,7 +148,8 @@ class _MessageBubbleState extends State<MessageBubble>
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
-                color: chatTheme?.quotedMessageTextColor ??
+                color:
+                    chatTheme?.quotedMessageTextColor ??
                     theme.colorScheme.onSurfaceVariant,
               ),
             ),
@@ -184,7 +187,7 @@ class _MessageBubbleState extends State<MessageBubble>
       return GestureDetector(
         // Keep right-click for desktop/web
         onSecondaryTapUp: (details) {
-          _showContextMenu(context, details.globalPosition, user);
+          _showContextMenu(context, details.globalPosition);
         },
         // Add long press for mobile devices
         onLongPress: () {
@@ -199,7 +202,7 @@ class _MessageBubbleState extends State<MessageBubble>
             position.dy + size.height / 2,
           );
 
-          _showContextMenu(context, tapPosition, user);
+          _showContextMenu(context, tapPosition);
         },
         child: Align(
           alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -238,23 +241,26 @@ class _MessageBubbleState extends State<MessageBubble>
                 ),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient: isMe
-                      ? LinearGradient(
-                          colors: Theme.of(context)
-                                  .extension<ChatTheme>()
-                                  ?.myMessageGradient ??
-                              [Colors.deepPurple, Colors.deepPurple.shade900],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : LinearGradient(
-                          colors: Theme.of(context)
-                                  .extension<ChatTheme>()
-                                  ?.otherMessageGradient ??
-                              [Colors.blue.shade900, Colors.blue.shade700],
-                          begin: Alignment.topRight,
-                          end: Alignment.bottomLeft,
-                        ),
+                  gradient:
+                      isMe
+                          ? LinearGradient(
+                            colors:
+                                Theme.of(
+                                  context,
+                                ).extension<ChatTheme>()?.myMessageGradient ??
+                                [Colors.deepPurple, Colors.deepPurple.shade900],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                          : LinearGradient(
+                            colors:
+                                Theme.of(context)
+                                    .extension<ChatTheme>()
+                                    ?.otherMessageGradient ??
+                                [Colors.blue.shade900, Colors.blue.shade700],
+                            begin: Alignment.topRight,
+                            end: Alignment.bottomLeft,
+                          ),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
@@ -289,9 +295,10 @@ class _MessageBubbleState extends State<MessageBubble>
                     Text(
                       msg.message,
                       style: TextStyle(
-                        color: isMe
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onSecondary,
+                        color:
+                            isMe
+                                ? Theme.of(context).colorScheme.onPrimary
+                                : Theme.of(context).colorScheme.onSecondary,
                       ),
                     ),
                     if (!isConsecutive) const SizedBox(height: 4),
@@ -300,13 +307,14 @@ class _MessageBubbleState extends State<MessageBubble>
                       style: TextStyle(
                         fontSize: 10,
                         fontStyle: FontStyle.italic,
-                        color: isMe
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.onPrimary.withOpacity(0.5)
-                            : Theme.of(
-                                context,
-                              ).colorScheme.onSecondary.withOpacity(0.5),
+                        color:
+                            isMe
+                                ? Theme.of(
+                                  context,
+                                ).colorScheme.onPrimary.withOpacity(0.5)
+                                : Theme.of(
+                                  context,
+                                ).colorScheme.onSecondary.withOpacity(0.5),
                       ),
                     ),
                   ],
@@ -322,7 +330,9 @@ class _MessageBubbleState extends State<MessageBubble>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    print("building ${msg.message}");
+    print("build message bubble ${msg.id}");
     return FutureBuilder<User?>(future: _futureUser, builder: futureBuilder);
   }
+
+  
 }

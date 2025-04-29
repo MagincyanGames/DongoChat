@@ -98,11 +98,11 @@ class MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final user = context.watch<UserProvider>().user;
 
-    // Si el chat no está listo, mostrar pantalla de carga
     if (_currentChat == null) {
       return LoadingChatScreen(error: _debugError, onRetry: _initializeChat);
     }
 
+    // Quitar el ScaffoldMessenger anidado
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(

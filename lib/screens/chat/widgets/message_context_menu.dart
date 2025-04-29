@@ -9,8 +9,9 @@ void showMessageContextMenu({
   required Offset position,
   required Message message,
   required bool isMe,
-  required Function(ObjectId) onReply,  // Nuevo callback para responder
-  Function(ObjectId)? onDelete,         // Nuevo callback opcional para eliminar
+  required Function(ObjectId) onReply,
+  Function(ObjectId)? onDelete,
+  Function(String)? onShowSnackbar, // Callback para mostrar Snackbars
   User? user,
 }) {
   // Get theme colors
@@ -77,17 +78,20 @@ void showMessageContextMenu({
         // Copy message to clipboard
         final messageText = message.message;
         Clipboard.setData(ClipboardData(text: messageText));
+        
+        // CAMBIO CRÍTICO: Usar el callback en lugar de ScaffoldMessenger directamente
+        if (onShowSnackbar != null) {
+          onShowSnackbar('Mensaje copiado al portapapeles');
+        }
         break;
         
       case 'delete':
-        // Usar el callback de eliminación
         if (isMe && onDelete != null && message.id != null) {
           onDelete(message.id!);
         }
         break;
         
       case 'reply':
-        // Usar el callback de respuesta
         if (message.id != null) {
           onReply(message.id!);
         }
