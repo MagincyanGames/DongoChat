@@ -14,13 +14,10 @@ class CachedData<T extends Sizeable> implements Sizeable {
   bool containsCached(ObjectId id) => _cache.containsKey(id);
 
   T? getCached(ObjectId id) {
-    print("Caching:$id");
     if (containsCached(id) && _cache[id]!.times > 0) {
-      print("Caching 1");
       _cache[id]!.times--;
       return _cache[id]!.data;
     }
-    print("Caching none");
 
     return null;
   }

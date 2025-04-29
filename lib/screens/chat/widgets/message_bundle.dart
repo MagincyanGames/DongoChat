@@ -54,10 +54,10 @@ class _MessageBubbleState extends State<MessageBubble>
 
     // Load referenced message if this is a reply
     if (msg.data?.resend != null) {
+      print("Loading original message: ${msg.data!.resend}");
       _originalMessageFuture = chat.findMessageById(msg.data!.resend!);
     }
 
-    print("$isMe - $isConsecutive - ${widget.msg.sender}");
   }
 
   @override
@@ -75,6 +75,7 @@ class _MessageBubbleState extends State<MessageBubble>
 
   // Add this method to build the quoted message UI
   Widget _buildQuotedMessage(Message originalMessage, ThemeData theme) {
+    print("Building quoted message: ${originalMessage.message}");
     return GestureDetector(
       onTap: () {
         // Llamamos al callback sólo si existe

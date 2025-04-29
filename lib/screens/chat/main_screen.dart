@@ -156,6 +156,7 @@ class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       if (mounted) {
         setState(() {});
 
+
         // Hacer scroll y luego solicitar foco nuevamente
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _scrollToBottomWithDelay();

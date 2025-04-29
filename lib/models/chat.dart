@@ -21,15 +21,12 @@ class Chat implements Sizeable {
   }
 
   factory Chat.fromMap(Map<String, dynamic> map) {
-    print("🔄 Convirtiendo mapa a Chat: ${map.keys}");
     try {
       final messages =
           (map['messages'] as List<dynamic>?)?.map((m) {
-            print("   - Procesando mensaje: ${m.runtimeType}");
             return Message.fromMap(m as Map<String, dynamic>);
           }).toList() ??
           [];
-      print("   - Total mensajes procesados: ${messages.length}");
 
       return Chat(
         id: map['_id'] as ObjectId?,
@@ -37,7 +34,6 @@ class Chat implements Sizeable {
         messages: messages,
       );
     } catch (e) {
-      print("❌ ERROR en Chat.fromMap: $e");
       rethrow; // Relanza el error para que se pueda manejar arriba
     }
   }

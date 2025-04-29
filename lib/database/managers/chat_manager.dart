@@ -50,6 +50,7 @@ class ChatManager extends DatabaseManager<Chat> {
       sender: sender,
       timestamp: DateTime.now(),
       iv: message.iv,
+      data: data,
     ));
   }
 
