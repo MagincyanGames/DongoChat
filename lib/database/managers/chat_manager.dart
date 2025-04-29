@@ -22,7 +22,7 @@ class ChatManager extends DatabaseManager<Chat> {
   bool get isGeneralChatReady => _generalChat != null;
   Chat getGeneralChat() => _generalChat!;
 
-  Future<void> addMessageToGeneral(String text, ObjectId? sender) async {
+  Future<void> addMessageToGeneral(String text, ObjectId? sender, MessageData? data) async {
     // 1. Cifrar el contenido
     final encryptedData = CryptoUtils.encryptString(text);
 
@@ -32,6 +32,7 @@ class ChatManager extends DatabaseManager<Chat> {
       message: encryptedData['cipherText']!,
       iv: encryptedData['iv']!,
       sender: sender,
+      data: data,
       timestamp: DateTime.now(),
     );
 

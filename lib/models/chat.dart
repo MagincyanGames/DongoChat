@@ -68,4 +68,21 @@ class Chat implements Sizeable {
 
     return total;
   }
+
+  Future<Message?> findMessageById(ObjectId objectId) async {
+    try {
+      // Search through the messages list for a message with matching ID
+      for (var message in messages) {
+        if (message.id == objectId) {
+          return message;
+        }
+      }
+
+      // No matching message found
+      return null;
+    } catch (e) {
+      print("❌ ERROR in findMessageById: $e");
+      return null;
+    }
+  }
 }

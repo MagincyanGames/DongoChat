@@ -2,6 +2,33 @@ import 'package:mongo_dart/mongo_dart.dart';
 import 'package:dongo_chat/models/sizeable.dart';
 import 'package:dongo_chat/utils/crypto.dart';
 
+class MessageData implements Sizeable {
+  ObjectId? resend;
+
+  MessageData({this.resend});
+
+  factory MessageData.fromMap(Map<String, dynamic> map) {
+    return MessageData(resend: map['resend'] as ObjectId?);
+  }
+
+  // Convert the MessageData instance to a map
+  Map<String, dynamic> toMap() {
+    return {'resend': resend};
+  }
+
+  @override
+  int get size {
+    var total = 0;
+
+    // id (ObjectId) si no es null
+    if (resend != null) {
+      total += 40; // 12 bytes reales + overhead
+    }
+
+    return total;
+  }
+}
+
 class Message implements Sizeable {
   ObjectId? id;
   String message; // Debería contener el texto DESENCRIPTADO
@@ -9,7 +36,8 @@ class Message implements Sizeable {
   ObjectId? sender;
   String iv; // Cambiar a non-nullable (siempre debe tener IV)
   DateTime? timestamp;
-
+  MessageData? data; // Cambiar a non-nullable si es necesario
+  
   Message({
     this.id,
     required this.message,
@@ -17,6 +45,7 @@ class Message implements Sizeable {
     this.timestamp,
     this.userId, // Hacerlo requerido
     required this.iv, // Hacerlo requerido
+    this.data,
   });
 
   // Método fromMap CORREGIDO (con desencriptación)
@@ -45,6 +74,9 @@ class Message implements Sizeable {
       sender: map['sender'] as ObjectId?,
       timestamp: timestampDate,
       iv: map['iv'] as String, // Asegurar que se carga el IV
+      data: map['data'] != null
+          ? MessageData.fromMap(map['data'] as Map<String, dynamic>)
+          : null, // Convertir MessageData de mapa a objeto
     );
   }
 
@@ -55,6 +87,7 @@ class Message implements Sizeable {
       'sender': sender,
       'timestamp': timestamp?.millisecondsSinceEpoch,
       'iv': iv,
+      'data': data?.toMap(), // Convertir MessageData a mapa
     };
   }
 

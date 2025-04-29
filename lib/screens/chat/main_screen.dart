@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dongo_chat/models/message.dart';
 import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 import 'package:provider/provider.dart';
@@ -15,10 +16,10 @@ class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  State<MainScreen> createState() => MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
+class MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   // Paso 1: Añadir Observer
   final TextEditingController _controller = TextEditingController();
   final FocusNode _textFieldFocus = FocusNode();
@@ -28,6 +29,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   String? _debugError;
   Timer? _refreshTimer;
   bool _isLoading = false;
+  ObjectId? reply; // Add this variable to track the message being replied to
+  ObjectId?
+  _highlightedMessageId; // Add this variable to track the highlighted message
 
   @override
   void initState() {
@@ -142,7 +146,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     setState(() => _isLoading = true);
 
     try {
-      await _chatManager.addMessageToGeneral(text, id);
+      // Create MessageData with reply ID if we have a reply
+      MessageData? messageData = MessageData(resend: reply);
+      setState(() => reply = null);
+
+      // Pass the messageData to addMessageToGeneral
+      await _chatManager.addMessageToGeneral(text, id, messageData);
+
       if (mounted) {
         setState(() {});
 
@@ -165,6 +175,48 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         // Y mantener foco después de todo
         _textFieldFocus.requestFocus();
       }
+    }
+  }
+
+  // Add this method to set a message as a reply
+  void setReplyMessage(ObjectId messageId) {
+    setState(() {
+      reply = messageId;
+    });
+    // Focus the text field after selecting to reply
+    _textFieldFocus.requestFocus();
+  }
+
+  // Add this method to MainScreenState
+  void scrollToMessage(ObjectId messageId) {
+    final messages = _chatManager.getGeneralChat().messages;
+
+    // Find the index of the message in the list
+    final index = messages.indexWhere((msg) => msg.id == messageId);
+
+    if (index != -1) {
+      // Add a small delay to allow the UI to update
+      Future.delayed(Duration(milliseconds: 100), () {
+        _scrollController.animateTo(
+          index * 70.0, // Approximate height of each message
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+
+        // Visual feedback - highlight the message briefly
+        setState(() {
+          _highlightedMessageId = messageId;
+        });
+
+        // Remove highlight after a delay
+        Future.delayed(Duration(seconds: 2), () {
+          if (mounted) {
+            setState(() {
+              _highlightedMessageId = null;
+            });
+          }
+        });
+      });
     }
   }
 
@@ -205,20 +257,20 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     : ListView.builder(
                       controller: _scrollController,
                       itemCount: messages.length,
-                      padding: EdgeInsets.zero,
-                      physics: const AlwaysScrollableScrollPhysics(),
                       itemBuilder: (context, index) {
                         final msg = messages[index];
-                        final isFromSameUser =
-                            index > 0 &&
-                            messages[index].sender ==
-                                messages[index - 1].sender;
-
                         return MessageBubble(
+                          chat: chat,
                           msg: msg,
                           isMe: msg.sender == user?.id,
                           isConsecutive:
-                              isFromSameUser, // Nueva propiedad para indicar mensajes consecutivos
+                              index > 0 &&
+                              messages[index].sender ==
+                                  messages[index - 1].sender,
+                          // <- 1.1.1) Le pasamos el callback:
+                          onQuotedTap: (ObjectId targetId) {
+                            scrollToMessage(targetId);
+                          },
                         );
                       },
                     ),
@@ -233,47 +285,129 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+  // Modify _buildMessageInput to show reply indicator
   Widget _buildMessageInput(ObjectId id) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    return Column(
+      children: [
+        // Show reply indicator if there's a reply
+        if (reply != null) _buildReplyIndicator(),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  focusNode: _textFieldFocus,
+                  controller: _controller,
+                  decoration: InputDecoration(
+                    hintText:
+                        reply != null
+                            ? 'Responder a mensaje...'
+                            : 'Escribe un mensaje…',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  onSubmitted: (_) => _sendMessage(id),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Material(
+                color: Theme.of(context).primaryColor,
+                borderRadius: BorderRadius.circular(30),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(30),
+                  onTap: _isLoading ? null : () => _sendMessage(id),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                            : const Icon(
+                              Icons.send,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Add this method to build the reply indicator
+  Widget _buildReplyIndicator() {
+    // Find the message being replied to
+    final messages = _chatManager.getGeneralChat().messages;
+    final replyMessage = messages.firstWhere(
+      (msg) => msg.id == reply,
+      orElse: () => Message(message: "Mensaje no encontrado", iv: ""),
+    );
+
+    final theme = Theme.of(context);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.primary.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
       child: Row(
         children: [
+          Container(
+            width: 4,
+            height: 40,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+            margin: const EdgeInsets.only(right: 8),
+          ),
           Expanded(
-            child: TextField(
-              focusNode: _textFieldFocus,
-              controller: _controller,
-              decoration: InputDecoration(
-                hintText: 'Escribe un mensaje…',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Respondiendo a:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                    fontSize: 12,
+                  ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              ),
-              onSubmitted: (_) => _sendMessage(id),
+                Text(
+                  replyMessage.message,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: theme.colorScheme.onSurface),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 8), // Espacio entre el TextField y el botón
-          Material(
-            color: Theme.of(context).primaryColor,
-            borderRadius: BorderRadius.circular(30),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(30),
-              onTap: _isLoading ? null : () => _sendMessage(id),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                child:
-                    _isLoading
-                        ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                        : const Icon(Icons.send, color: Colors.white, size: 24),
-              ),
+          IconButton(
+            icon: Icon(Icons.close, color: theme.colorScheme.primary, size: 20),
+            style: IconButton.styleFrom(
+              backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+              minimumSize: const Size(36, 36),
             ),
+            onPressed: () => setState(() => reply = null),
           ),
         ],
       ),
