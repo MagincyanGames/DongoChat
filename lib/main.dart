@@ -12,7 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Definición centralizada de la versión de la app
-const String appVersion = '0.7.3';
+const String appVersion = '0.7.4';
 
 final databaseService = DatabaseService();
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -74,17 +74,19 @@ class _MainAppState extends State<MainApp> {
       final prefs = await SharedPreferences.getInstance();
       final username = prefs.getString('username');
       final pwdHash = prefs.getString('password');
-      
+
       if (username != null && pwdHash != null) {
         final userMgr = DBManagers.user;
         // Agregamos un timeout para evitar que se bloquee indefinidamente
-        final ok = await userMgr.authenticateUser(username, pwdHash)
+        final ok = await userMgr
+            .authenticateUser(username, pwdHash)
             .timeout(const Duration(seconds: 5), onTimeout: () => false);
-        
+
         if (ok) {
-          final doc = await userMgr.findByUsername(username)
+          final doc = await userMgr
+              .findByUsername(username)
               .timeout(const Duration(seconds: 5), onTimeout: () => null);
-          
+
           if (doc != null) {
             doc.password = pwdHash;
             context.read<UserProvider>().user = doc;
@@ -122,14 +124,8 @@ class _MainAppState extends State<MainApp> {
         extensions: [
           ChatTheme(
             // Gradientes de mensaje
-            myMessageGradient: [
-              Colors.deepPurple,
-              Colors.deepPurple.shade700,
-            ],
-            otherMessageGradient: [
-              Colors.blue.shade600,
-              Colors.blue.shade900,
-            ],
+            myMessageGradient: [Colors.deepPurple, Colors.deepPurple.shade700],
+            otherMessageGradient: [Colors.blue.shade600, Colors.blue.shade900],
 
             // Mis mensajes citados (borde morado)
             myQuotedMessageBorderColor: Colors.purple.shade300,
@@ -172,10 +168,7 @@ class _MainAppState extends State<MainApp> {
               Colors.deepPurple.shade600,
               Colors.deepPurple.shade900,
             ],
-            otherMessageGradient: [
-              Colors.blue.shade700,
-              Colors.blue.shade900,
-            ],
+            otherMessageGradient: [Colors.blue.shade700, Colors.blue.shade900],
 
             // Mis mensajes citados (borde morado claro)
             myQuotedMessageBorderColor: Colors.purple.shade300,
@@ -207,13 +200,24 @@ class _MainAppState extends State<MainApp> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red,
+                    ),
                     const SizedBox(height: 16),
-                    const Text('Error de conexión', 
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Error de conexión',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 8),
-                    Text('No se pudo conectar a la base de datos',
-                      style: TextStyle(color: Colors.grey[700])),
+                    Text(
+                      'No se pudo conectar a la base de datos',
+                      style: TextStyle(color: Colors.grey[700]),
+                    ),
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: () {
@@ -228,7 +232,7 @@ class _MainAppState extends State<MainApp> {
               ),
             );
           }
-          
+
           // Si todavía está cargando
           if (snap.connectionState != ConnectionState.done) {
             return const Scaffold(
@@ -244,13 +248,13 @@ class _MainAppState extends State<MainApp> {
               ),
             );
           }
-          
+
           // Conexión exitosa
           return snap.data != null ? const MainScreen() : const LoginScreen();
         },
       ),
       builder: (context, child) {
-        return ThemeTransitionOverlay(child: child!);
+        return SafeArea(child: ThemeTransitionOverlay(child: child!));
       },
     );
   }
