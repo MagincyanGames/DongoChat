@@ -1,5 +1,22 @@
 import 'package:flutter/material.dart';
 
+// Add this extension at the top of your file, outside any class
+extension GradientScaleOpacity on Gradient {
+  Gradient scale(double opacity) {
+    if (this is LinearGradient) {
+      final LinearGradient linearGradient = this as LinearGradient;
+      return LinearGradient(
+        begin: linearGradient.begin,
+        end: linearGradient.end,
+        colors: linearGradient.colors.map((color) => color.withOpacity(color.opacity * opacity)).toList(),
+        stops: linearGradient.stops,
+        tileMode: linearGradient.tileMode,
+      );
+    }
+    return this;
+  }
+}
+
 class ChatTheme extends ThemeExtension<ChatTheme> {
   final List<Color> myMessageGradient;
   final List<Color> otherMessageGradient;

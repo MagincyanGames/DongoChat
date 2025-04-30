@@ -15,6 +15,7 @@ dependencies:
   encrypt: ^5.0.3
   shared_preferences: ^2.5.3
   scrollable_positioned_list: ^0.3.8
+  lottie: ^3.3.1
 
 dev_dependencies:
   flutter_test:
@@ -23,3 +24,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/animations/

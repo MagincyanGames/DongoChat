@@ -28,11 +28,17 @@ class DatabaseService {
   }
 
   Future<bool> connectToPreferences() async {
-    return await connectToDatabase(
-      await loadSelectedServer()
-          ? 'mongodb://play.onara.top:27017/DongoChat'
-          : 'mongodb+srv://onara:AduLHQ6icblTnfCV@onaradb.5vdzp.mongodb.net/?retryWrites=true&w=majority&appName=onaradb/DongoChat',
-    );
+    try {
+      // Tu código actual para conectar a la base de datos
+      return await connectToDatabase(
+        await loadSelectedServer()
+            ? 'mongodb://play.onara.top:27017/DongoChat'
+            : 'mongodb+srv://onara:AduLHQ6icblTnfCV@onaradb.5vdzp.mongodb.net/?retryWrites=true&w=majority&appName=onaradb/DongoChat',
+      ).timeout(const Duration(seconds: 5), onTimeout: () => false);
+    } catch (e) {
+      print('Error en connectToPreferences: $e');
+      return false;
+    }
   }
 
   Future<bool> connectToDatabase([String? customUrl]) async {
