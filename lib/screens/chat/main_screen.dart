@@ -81,7 +81,6 @@ class MainScreenState extends State<MainScreen> {
     MessageData? messageData,
   ) async {
     setState(() => _isLoading = true);
-
     try {
       // Enviar mensaje al chat actual
       await _chatManager.addMessageToChat(_chatName, text, userId, messageData);

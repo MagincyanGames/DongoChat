@@ -14,7 +14,12 @@ import 'package:dongo_chat/screens/chat/widgets/message_bundle.dart';
 class ChatView extends StatefulWidget {
   final Chat chat;
   final User? currentUser;
-  final Future<void> Function(String text, ObjectId userId, MessageData? messageData) onSendMessage;
+  final Future<void> Function(
+    String text,
+    ObjectId userId,
+    MessageData? messageData,
+  )
+  onSendMessage;
   final Future<bool> Function() onRefreshMessages;
   final Future<void> Function(ObjectId messageId)? onDeleteMessage;
   final VoidCallback? onChatInitialized;
@@ -39,15 +44,18 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _textFieldFocus = FocusNode();
   final ItemScrollController _itemScrollController = ItemScrollController();
-  final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
+  final ItemPositionsListener _itemPositionsListener =
+      ItemPositionsListener.create();
+  final GlobalKey _sendButtonKey = GlobalKey();
 
   // Caching maps
   final Map<ObjectId, User> _userCache = {};
   final Map<ObjectId, Message> _quotedCache = {};
-  
+
   Timer? _refreshTimer;
   bool _isLoading = false;
-  ObjectId? reply;
+  MessageData messageData = MessageData();
+
   ObjectId? _highlightedMessageId;
   bool _showScrollButton = false;
   bool _initialLoadDone = false;
@@ -96,13 +104,13 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
 
   Future<void> _refreshMessages() async {
     if (!mounted) return;
-    
+
     final hasNewMessages = await widget.onRefreshMessages();
-    
+
     // Always refresh the metadata to ensure quotes are up to date
     await _prefetchMetadata();
-    
-    if (hasNewMessages || reply != null) {
+
+    if (hasNewMessages || messageData.resend != null) {
       if (mounted) setState(() {});
     }
   }
@@ -110,25 +118,26 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   Future<void> _prefetchMetadata() async {
     final userMgr = DBManagers.user;
     final msgs = widget.chat.messages;
-    
+
     try {
       // First, collect all the needed IDs
       final Set<ObjectId> neededUsers = {};
       final Set<ObjectId> neededQuotes = {};
-      
+
       for (final msg in msgs) {
         if (msg.sender != null) {
           neededUsers.add(msg.sender!);
         }
-        
+
         // Ensure we get all quoted messages
         if (msg.data?.resend != null) {
           neededQuotes.add(msg.data!.resend!);
         }
       }
-      
+
       // Prefetch users not in cache
-      final usersToFetch = neededUsers.where((id) => !_userCache.containsKey(id)).toList();
+      final usersToFetch =
+          neededUsers.where((id) => !_userCache.containsKey(id)).toList();
       for (final userId in usersToFetch) {
         try {
           final user = await userMgr.findById(userId);
@@ -137,15 +146,16 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
           print('Error fetching user $userId: $e');
         }
       }
-      
+
       // Prefetch quoted messages not in cache
-      final quotesToFetch = neededQuotes.where((id) => !_quotedCache.containsKey(id)).toList();
-      
+      final quotesToFetch =
+          neededQuotes.where((id) => !_quotedCache.containsKey(id)).toList();
+
       // Log for debugging
       if (quotesToFetch.isNotEmpty) {
         print('Fetching ${quotesToFetch.length} quoted messages');
       }
-      
+
       for (final quoteId in quotesToFetch) {
         try {
           final quote = await widget.chat.findMessageById(quoteId);
@@ -201,28 +211,18 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     _controller.clear();
     setState(() => _isLoading = true);
 
-    MessageData? messageData = reply != null ? MessageData(resend: reply) : null;
-    
-    // Pre-cache the quoted message before sending
-    if (reply != null && !_quotedCache.containsKey(reply)) {
-      final quotedMessage = await widget.chat.findMessageById(reply!);
-      if (quotedMessage != null) {
-        _quotedCache[reply!] = quotedMessage;
-      }
-    }
-    
-    setState(() => reply = null);
-
     try {
       await widget.onSendMessage(
         text,
         widget.currentUser?.id ?? ObjectId(),
         messageData,
       );
+
+      setState(() => messageData = MessageData());
       
       // Force a metadata refresh to ensure quotes are cached
       await _prefetchMetadata();
-      
+
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
@@ -239,7 +239,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   void setReplyMessage(ObjectId messageId) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        setState(() => reply = messageId);
+        setState(() => messageData.resend = messageId);
         Future.delayed(const Duration(milliseconds: 50), () {
           if (mounted) {
             _textFieldFocus.requestFocus();
@@ -273,6 +273,56 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     }
   }
 
+  void _showMessageTypeMenu(BuildContext context, Offset position) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromCenter(
+          center: position.translate(0, -20),
+          width: 40,
+          height: 40,
+        ),
+        Offset.zero & overlay.size,
+      ),
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      items: [
+        const PopupMenuItem<String>(
+          value: 'text',
+          child: Row(
+            children: [Icon(Icons.message), SizedBox(width: 8), Text('Texto')],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'apk',
+          child: Row(
+            children: [Icon(Icons.android), SizedBox(width: 8), Text('APK')],
+          ),
+        ),
+      ],
+    ).then((String? value) {
+      if (value != null) {
+        // Handle different message types
+        switch (value) {
+          case 'text':
+            _sendMessage();
+            break;
+          case 'apk':
+            var splt = _controller.text.trim().split('\n');
+
+            _controller.text = splt.length > 1 ? splt[0].trim() : 'apk';
+            messageData.url = splt[1].trim();
+            messageData.type = 'apk';
+            _sendMessage();
+            break;
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -298,46 +348,54 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
           Column(
             children: [
               Expanded(
-                child: messages.isEmpty
-                    ? const Center(child: Text('No hay mensajes aún'))
-                    : ScrollablePositionedList.builder(
-                        key: const PageStorageKey('chat-list'),
-                        itemScrollController: _itemScrollController,
-                        itemPositionsListener: _itemPositionsListener,
-                        itemCount: messages.length,
-                        reverse: true,
-                        padding: const EdgeInsets.all(8),
-                        addAutomaticKeepAlives: false,
-                        minCacheExtent: 2000,
-                        itemBuilder: (context, index) {
-                          final actualIndex = messages.length - 1 - index;
-                          final msg = messages[actualIndex];
-                          final msgId = msg.id!;
-                          
-                          // Check if this message is consecutive
-                          final isConsecutive = actualIndex > 0 && 
-                              messages[actualIndex].sender == messages[actualIndex - 1].sender;
-                          
-                          // Get quoted message if available
-                          final quoted = msg.data?.resend != null 
-                              ? (_quotedCache[msg.data!.resend!] ?? 
-                                 Message(id: msg.data!.resend, message: "Cargando mensaje...", iv: ""))
-                              : null;
-                          
-                          return MessageBubble(
-                            key: ValueKey(msgId),
-                            msg: msg,
-                            me: user?.id ?? ObjectId(),
-                            user: _userCache[msg.sender],
-                            quoted: quoted,
-                            isConsecutive: isConsecutive,
-                            isHighlighted: _highlightedMessageId == msgId,
-                            onQuotedTap: scrollToMessage,
-                            onReply: setReplyMessage,
-                            onShowSnackbar: _showSnackbar,
-                          );
-                        },
-                      ),
+                child:
+                    messages.isEmpty
+                        ? const Center(child: Text('No hay mensajes aún'))
+                        : ScrollablePositionedList.builder(
+                          key: const PageStorageKey('chat-list'),
+                          itemScrollController: _itemScrollController,
+                          itemPositionsListener: _itemPositionsListener,
+                          itemCount: messages.length,
+                          reverse: true,
+                          padding: const EdgeInsets.all(8),
+                          addAutomaticKeepAlives: false,
+                          minCacheExtent: 2000,
+                          itemBuilder: (context, index) {
+                            final actualIndex = messages.length - 1 - index;
+                            final msg = messages[actualIndex];
+                            final msgId = msg.id!;
+
+                            // Check if this message is consecutive
+                            final isConsecutive =
+                                actualIndex > 0 &&
+                                messages[actualIndex].sender ==
+                                    messages[actualIndex - 1].sender;
+
+                            // Get quoted message if available
+                            final quoted =
+                                msg.data?.resend != null
+                                    ? (_quotedCache[msg.data!.resend!] ??
+                                        Message(
+                                          id: msg.data!.resend,
+                                          message: "Cargando mensaje...",
+                                          iv: "",
+                                        ))
+                                    : null;
+
+                            return MessageBubble(
+                              key: ValueKey(msgId),
+                              msg: msg,
+                              me: user?.id ?? ObjectId(),
+                              user: _userCache[msg.sender],
+                              quoted: quoted,
+                              isConsecutive: isConsecutive,
+                              isHighlighted: _highlightedMessageId == msgId,
+                              onQuotedTap: scrollToMessage,
+                              onReply: setReplyMessage,
+                              onShowSnackbar: _showSnackbar,
+                            );
+                          },
+                        ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -351,16 +409,17 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
             child: AnimatedOpacity(
               opacity: _showScrollButton ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 200),
-              child: _showScrollButton
-                  ? FloatingActionButton(
-                      mini: true,
-                      backgroundColor: Theme.of(context).primaryColor,
-                      foregroundColor: Colors.white,
-                      elevation: 3,
-                      onPressed: _scrollToBottom,
-                      child: const Icon(Icons.keyboard_arrow_down),
-                    )
-                  : const SizedBox.shrink(),
+              child:
+                  _showScrollButton
+                      ? FloatingActionButton(
+                        mini: true,
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                        elevation: 3,
+                        onPressed: _scrollToBottom,
+                        child: const Icon(Icons.keyboard_arrow_down),
+                      )
+                      : const SizedBox.shrink(),
             ),
           ),
         ],
@@ -371,7 +430,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   Widget _buildMessageInput() {
     return Column(
       children: [
-        if (reply != null) _buildReplyIndicator(),
+        if (messageData.resend != null) _buildReplyIndicator(),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
@@ -402,7 +461,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                     style: const TextStyle(height: 1.5),
                     decoration: InputDecoration(
                       hintText:
-                          reply != null
+                          messageData.resend != null
                               ? 'Responder a mensaje...'
                               : 'Escribe un mensaje…',
                       hintStyle: const TextStyle(height: 1.5),
@@ -421,29 +480,45 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(width: 8),
-              Material(
-                color: Theme.of(context).primaryColor,
-                borderRadius: BorderRadius.circular(30),
-                child: InkWell(
+              GestureDetector(
+                onLongPress: () {
+                  // Get the position of the button using its key
+                  final RenderBox? buttonBox =
+                      _sendButtonKey.currentContext?.findRenderObject()
+                          as RenderBox?;
+                  if (buttonBox != null) {
+                    // Get the position of the center of the button
+                    final buttonPosition = buttonBox.localToGlobal(
+                      buttonBox.size.center(Offset.zero),
+                    );
+                    _showMessageTypeMenu(context, buttonPosition);
+                  }
+                },
+                child: Material(
+                  key: _sendButtonKey, // Add this key to the Material widget
+                  color: Theme.of(context).primaryColor,
                   borderRadius: BorderRadius.circular(30),
-                  onTap: _isLoading || widget.isLoading ? null : _sendMessage,
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    child:
-                        _isLoading || widget.isLoading
-                            ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(30),
+                    onTap: _isLoading || widget.isLoading ? null : _sendMessage,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      child:
+                          _isLoading || widget.isLoading
+                              ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Icon(
+                                Icons.send,
                                 color: Colors.white,
-                                strokeWidth: 2,
+                                size: 24,
                               ),
-                            )
-                            : const Icon(
-                              Icons.send,
-                              color: Colors.white,
-                              size: 24,
-                            ),
+                    ),
                   ),
                 ),
               ),
@@ -457,7 +532,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   Widget _buildReplyIndicator() {
     final messages = widget.chat.messages;
     final replyMessage = messages.firstWhere(
-      (msg) => msg.id == reply,
+      (msg) => msg.id == messageData.resend,
       orElse: () => Message(message: "Mensaje no encontrado", iv: ""),
     );
     final theme = Theme.of(context);
@@ -522,7 +597,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
               backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
               minimumSize: const Size(36, 36),
             ),
-            onPressed: () => setState(() => reply = null),
+            onPressed: () => setState(() => messageData.resend = null),
           ),
         ],
       ),

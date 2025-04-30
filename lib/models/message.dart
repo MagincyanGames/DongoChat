@@ -4,16 +4,22 @@ import 'package:dongo_chat/utils/crypto.dart';
 
 class MessageData implements Sizeable {
   ObjectId? resend;
+  String? url;
+  String? type;
 
-  MessageData({this.resend});
+  MessageData({this.resend, this.url, this.type});
 
   factory MessageData.fromMap(Map<String, dynamic> map) {
-    return MessageData(resend: map['resend'] as ObjectId?);
+    return MessageData(
+      resend: map['resend'] as ObjectId?,
+      url: map['url'] as String?,
+      type: map['type'] as String?,
+    );
   }
 
   // Convert the MessageData instance to a map
   Map<String, dynamic> toMap() {
-    return {'resend': resend};
+    return {'resend': resend, 'url': url, 'type': type};
   }
 
   @override
@@ -37,7 +43,7 @@ class Message implements Sizeable {
   String iv; // Cambiar a non-nullable (siempre debe tener IV)
   DateTime? timestamp;
   MessageData? data; // Cambiar a non-nullable si es necesario
-  
+
   Message({
     this.id,
     required this.message,
@@ -74,9 +80,10 @@ class Message implements Sizeable {
       sender: map['sender'] as ObjectId?,
       timestamp: timestampDate,
       iv: map['iv'] as String, // Asegurar que se carga el IV
-      data: map['data'] != null
-          ? MessageData.fromMap(map['data'] as Map<String, dynamic>)
-          : null, // Convertir MessageData de mapa a objeto
+      data:
+          map['data'] != null
+              ? MessageData.fromMap(map['data'] as Map<String, dynamic>)
+              : null, // Convertir MessageData de mapa a objeto
     );
   }
 
