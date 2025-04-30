@@ -4,6 +4,7 @@ import 'package:dongo_chat/database/managers/chat_manager.dart';
 import 'package:dongo_chat/main.dart';
 import 'package:dongo_chat/models/chat.dart';
 import 'package:dongo_chat/models/message.dart';
+import 'package:dongo_chat/models/user.dart';
 import 'package:dongo_chat/providers/UserProvider.dart';
 import 'package:dongo_chat/screens/chat/widgets/chat_view.dart';
 import 'package:dongo_chat/screens/chat/widgets/loadding_screen.dart';
@@ -11,6 +12,7 @@ import 'package:dongo_chat/screens/chat/widgets/logout_button.dart';
 import 'package:dongo_chat/screens/debug/debug_button.dart';
 import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:dongo_chat/widgets/theme_toggle_button.dart';
+import 'package:dongo_chat/screens/chat/chat_selection_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 import 'package:provider/provider.dart';
@@ -28,19 +30,21 @@ class MainScreenState extends State<MainScreen> {
   String? _debugError;
   bool _isLoading = false;
   final GlobalKey<ChatViewState> _chatViewKey = GlobalKey<ChatViewState>();
-  
+
   // El chat actual
   Chat? _currentChat;
-  
+
   // Nombre predeterminado del chat
-  final String _chatName = 'general';
+  var _chatName = 'general';
+  // Cambiamos el valor inicial para que abra primero el selector
+  bool _showSelector = true;
 
   @override
   void initState() {
     super.initState();
     _dbService = Provider.of<DatabaseService>(context, listen: false);
     _chatManager = DBManagers.chat;
-
+    // ----------> Añadido: precalentar la conexión/inicialización del chat por defecto
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeChat();
     });
@@ -50,7 +54,7 @@ class MainScreenState extends State<MainScreen> {
     try {
       // Inicializar el chat
       final chat = await _chatManager.initChat(_chatName);
-      
+
       if (mounted) {
         setState(() {
           if (chat != null) {
@@ -68,9 +72,13 @@ class MainScreenState extends State<MainScreen> {
     }
   }
 
-  Future<void> _handleSendMessage(String text, ObjectId userId, MessageData? messageData) async {
+  Future<void> _handleSendMessage(
+    String text,
+    ObjectId userId,
+    MessageData? messageData,
+  ) async {
     setState(() => _isLoading = true);
-    
+
     try {
       // Enviar mensaje al chat actual
       await _chatManager.addMessageToChat(_chatName, text, userId, messageData);
@@ -95,30 +103,90 @@ class MainScreenState extends State<MainScreen> {
     _chatViewKey.currentState?.scrollToMessage(messageId);
   }
 
+  /// Convierte "general" → "General",
+  ///         "this-is-a-test" → "This is a test"
+  String prettify(String input) {
+    // 1. Reemplaza guiones por espacios
+    final withSpaces = input.replaceAll('-', ' ');
+    if (withSpaces.isEmpty) return withSpaces;
+    // 2. Capitaliza la primera letra
+    return withSpaces[0].toUpperCase() + withSpaces.substring(1);
+  }
+
+  Widget _chatSelectorScreen() {
+    return ChatSelectionScreen(
+      onChatSelected: (name) {
+        setState(() {
+          _chatName = name;
+          _showSelector = false;
+        });
+        // Tras seleccionar, inicializamos el chat
+        _initializeChat();
+      },
+    );
+  }
+
+  Widget _loadding() {
+    return LoadingChatScreen(error: _debugError, onRetry: _initializeChat);
+  }
+
+  Widget _chatScreen(User user) {
+    return ChatView(
+      key: ValueKey(_chatName), // forzar rebuild al cambiar chat
+      chat: _currentChat!,
+      currentUser: user,
+      onSendMessage: _handleSendMessage,
+      onRefreshMessages: _handleRefreshMessages,
+      isLoading: _isLoading,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<UserProvider>().user;
+    Widget? body;
 
-    if (_currentChat == null) {
-      return LoadingChatScreen(error: _debugError, onRetry: _initializeChat);
+    // Si estamos en selector (por defecto true), mostramos la lista
+    if (_showSelector) {
+      body = _chatSelectorScreen();
     }
 
-    // Quitar el ScaffoldMessenger anidado
+    // pantalla de chat normal
+    final user = context.watch<UserProvider>().user;
+    if (_currentChat == null) {
+      body = _loadding();
+    }
+
+    if (!_showSelector && _currentChat != null && user != null) {
+      body = _chatScreen(user);
+    }
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: Text('DongoChat v${appVersion}'),
-        actions: const [ThemeToggleButton(), DebugButton(), LogoutButton()],
+        title: Text(prettify(_chatName)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.list),
+            onPressed: () => setState(() => _showSelector = true),
+          ),
+          const ThemeToggleButton(),
+          const DebugButton(),
+          const LogoutButton(),
+        ],
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ?? 
-                  Colors.blue.shade900,
-                Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ?? 
-                  Colors.deepPurple.shade900,
+                Theme.of(
+                      context,
+                    ).extension<ChatTheme>()?.otherMessageGradient.last ??
+                    Colors.blue.shade900,
+                Theme.of(
+                      context,
+                    ).extension<ChatTheme>()?.myMessageGradient.first ??
+                    Colors.deepPurple.shade900,
               ],
             ),
           ),
@@ -126,14 +194,7 @@ class MainScreenState extends State<MainScreen> {
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
       ),
-      body: ChatView(
-        key: _chatViewKey,
-        chat: _currentChat!,
-        currentUser: user,
-        onSendMessage: _handleSendMessage,
-        onRefreshMessages: _handleRefreshMessages,
-        isLoading: _isLoading,
-      ),
+      body: body,
     );
   }
 }

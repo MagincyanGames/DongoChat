@@ -60,6 +60,11 @@ abstract class DatabaseManager<T extends Sizeable> implements Sizeable{
     return documents.map((doc) => fromMap(doc)).toList();
   }
 
+  /// Retorna todos los documentos de la colección sin aplicar filtro
+  Future<List<T>> findAll() async {
+    return await find();
+  }
+
   Future<T?> findById(ObjectId? id) async {
     if (id == null) {
       return null;

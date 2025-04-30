@@ -79,11 +79,11 @@ void showMessageContextMenu({
         final messageText = message.message;
         Clipboard.setData(ClipboardData(text: messageText));
         
-        // CAMBIO CRÍTICO: Usar el callback en lugar de ScaffoldMessenger directamente
-        if (onShowSnackbar != null) {
-          onShowSnackbar('Mensaje copiado al portapapeles');
-        }
-        break;
+        // // CAMBIO CRÍTICO: Usar el callback en lugar de ScaffoldMessenger directamente
+        // if (onShowSnackbar != null) {
+        //   onShowSnackbar('Mensaje copiado al portapapeles');
+        // }
+        // break;
         
       case 'delete':
         if (isMe && onDelete != null && message.id != null) {
