@@ -12,7 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Definición centralizada de la versión de la app
-const String appVersion = '0.7.4';
+const String appVersion = '0.7.5';
 
 final databaseService = DatabaseService();
 final navigatorKey = GlobalKey<NavigatorState>();

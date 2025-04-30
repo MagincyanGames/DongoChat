@@ -33,61 +33,76 @@ class _ChatSelectionScreenState extends State<ChatSelectionScreen> {
     final theme = Theme.of(context);
     final chatTheme = theme.extension<ChatTheme>();
 
-    return FutureBuilder<List<Chat>>(
-      future: _chatsFuture,
-      builder: (ctx, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snap.hasError || snap.data == null) {
-          return const Center(child: Text('Error cargando chats'));
-        }
-        final chats = snap.data!;
-        return ListView.separated(
-          padding: const EdgeInsets.all(8),
-          itemCount: chats.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (_, i) {
-            final chat = chats[i];
-            final name = _prettify(chat.name ?? 'Unnamed');
-            return Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                splashColor: chatTheme
-                        ?.otherQuotedMessageBorderColor
-                        ?.withOpacity(0.3) ??
-                    theme.colorScheme.primary.withOpacity(0.3),
-                onTap: () => widget.onChatSelected(chat.name!),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    color: chatTheme?.otherQuotedMessageBackgroundColor ??
-                        theme.colorScheme.surfaceVariant.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border(
-                      left: BorderSide(
-                        color: chatTheme?.otherQuotedMessageBorderColor ??
-                            theme.colorScheme.primary,
-                        width: 4,
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            chatTheme?.otherMessageGradient.last ?? Colors.blue.shade900,
+            chatTheme?.myMessageGradient.first ?? Colors.deepPurple.shade900,
+          ],
+        ).withOpacity(0.6),
+      ),
+      child: FutureBuilder<List<Chat>>(
+        future: _chatsFuture,
+        builder: (ctx, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError || snap.data == null) {
+            return const Center(child: Text('Error cargando chats'));
+          }
+          final chats = snap.data!;
+          return ListView.separated(
+            padding: const EdgeInsets.all(8),
+            itemCount: chats.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (_, i) {
+              final chat = chats[i];
+              final name = _prettify(chat.name ?? 'Unnamed');
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  splashColor:
+                      chatTheme?.otherQuotedMessageBorderColor?.withOpacity(
+                        0.3,
+                      ) ??
+                      theme.colorScheme.primary.withOpacity(0.3),
+                  onTap: () => widget.onChatSelected(chat.name!),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color:
+                          chatTheme?.otherQuotedMessageBackgroundColor ??
+                          theme.colorScheme.surfaceVariant.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border(
+                        left: BorderSide(
+                          color:
+                              chatTheme?.otherQuotedMessageBorderColor ??
+                              theme.colorScheme.primary,
+                          width: 4,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      name,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  child: Text(
-                    name,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
                 ),
-              ),
-            );
-          },
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

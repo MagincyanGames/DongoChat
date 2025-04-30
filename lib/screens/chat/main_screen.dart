@@ -115,6 +115,7 @@ class MainScreenState extends State<MainScreen> {
 
   Widget _chatSelectorScreen() {
     return ChatSelectionScreen(
+      key: const ValueKey('selector'),
       onChatSelected: (name) {
         setState(() {
           _chatName = name;
@@ -163,19 +164,12 @@ class MainScreenState extends State<MainScreen> {
 
     if (!_showSelector && _currentChat != null && user != null) {
       body = _chatScreen(user);
-       actions=[         Material(
-            color: Colors.transparent,
-            child: IconButton(
-              icon: const Icon(Icons.list),
-              onPressed: () => setState(() => _showSelector = true),
-            ),
-          ),
-          const ThemeToggleButton(),
-          const DebugButton(),
-          const LogoutButton(),
-       ];
+      actions = [
+        const ThemeToggleButton(),
+        const DebugButton(),
+        const LogoutButton(),
+      ];
     }
-
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
@@ -202,7 +196,69 @@ class MainScreenState extends State<MainScreen> {
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
       ),
-      body: body,
+      body: Stack(
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (Widget newChild, Animation<double> animation) {
+              // For the selector, maintain slide animations
+              if (newChild.key == const ValueKey('selector')) {
+                final offset = Tween<Offset>(
+                  begin: const Offset(0, -1),
+                  end: Offset.zero,
+                ).animate(animation);
+
+                return ClipRect(
+                  child: SlideTransition(position: offset, child: newChild),
+                );
+              } else {
+                // For the chat view, no animation (stays static)
+                return FadeTransition(opacity: animation, child: newChild);
+              }
+            },
+            child: body,
+          ),
+          // Botón flotante posicionado para que sobresalga del AppBar
+          if (!_showSelector)
+            Positioned(
+              top: 10, // Esto lo coloca parcialmente sobre el AppBar
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ??
+                            Colors.blue.shade900,
+                        Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ??
+                            Colors.deepPurple.shade900,
+                      ],
+                    ).withOpacity(0.6),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.group),
+                    color: Colors.white,
+                    splashRadius: 25, // Controla el tamaño del efecto de onda
+                    onPressed: () => setState(() => _showSelector = true),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
