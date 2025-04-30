@@ -128,7 +128,7 @@ class _MainAppState extends State<MainApp> {
             ],
             otherMessageGradient: [
               Colors.blue.shade600,
-              Colors.blue.shade800,
+              Colors.blue.shade900,
             ],
 
             // Mis mensajes citados (borde morado)
