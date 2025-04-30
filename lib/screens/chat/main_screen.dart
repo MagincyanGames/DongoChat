@@ -25,6 +25,9 @@ class MainScreen extends StatefulWidget {
 }
 
 class MainScreenState extends State<MainScreen> {
+  // Add this flag
+  bool _navigatingBackWithGesture = false;
+
   late final ChatManager _chatManager;
   late final DatabaseService _dbService;
   String? _debugError;
@@ -170,94 +173,122 @@ class MainScreenState extends State<MainScreen> {
         const LogoutButton(),
       ];
     }
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      appBar: AppBar(
-        title: Text(prettify(_chatName)),
-        actions: actions,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                Theme.of(
-                      context,
-                    ).extension<ChatTheme>()?.otherMessageGradient.last ??
-                    Colors.blue.shade900,
-                Theme.of(
-                      context,
-                    ).extension<ChatTheme>()?.myMessageGradient.first ??
-                    Colors.deepPurple.shade900,
-              ],
+    return PopScope(
+      canPop: _showSelector, // Only allow app to close when in selector view
+      onPopInvoked: (didPop) {
+        // If we're in chat view and back was pressed
+        if (!didPop) {
+          setState(() {
+            _navigatingBackWithGesture = true; // Set flag for back navigation
+            _showSelector = true;
+          });
+          
+          // Reset the flag after animation completes
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) setState(() => _navigatingBackWithGesture = false);
+          });
+        }
+      },
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        appBar: AppBar(
+          title: Text(prettify(_chatName)),
+          actions: actions,
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  Theme.of(
+                        context,
+                      ).extension<ChatTheme>()?.otherMessageGradient.last ??
+                      Colors.blue.shade900,
+                  Theme.of(
+                        context,
+                      ).extension<ChatTheme>()?.myMessageGradient.first ??
+                      Colors.deepPurple.shade900,
+                ],
+              ),
             ),
           ),
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
         ),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
-      ),
-      body: Stack(
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (Widget newChild, Animation<double> animation) {
-              // For the selector, maintain slide animations
-              if (newChild.key == const ValueKey('selector')) {
-                final offset = Tween<Offset>(
-                  begin: const Offset(0, -1),
-                  end: Offset.zero,
-                ).animate(animation);
+        body: Stack(
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (Widget newChild, Animation<double> animation) {
+                // For the selector coming from back button, use horizontal slide
+                if (newChild.key == const ValueKey('selector') && _navigatingBackWithGesture) {
+                  final offset = Tween<Offset>(
+                    begin: const Offset(-1, 0), // Slide from left to right
+                    end: Offset.zero,
+                  ).animate(animation);
 
-                return ClipRect(
-                  child: SlideTransition(position: offset, child: newChild),
-                );
-              } else {
-                // For the chat view, no animation (stays static)
-                return FadeTransition(opacity: animation, child: newChild);
-              }
-            },
-            child: body,
-          ),
-          // Botón flotante posicionado para que sobresalga del AppBar
-          if (!_showSelector)
-            Positioned(
-              top: 10, // Esto lo coloca parcialmente sobre el AppBar
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ??
-                            Colors.blue.shade900,
-                        Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ??
-                            Colors.deepPurple.shade900,
+                  return ClipRect(
+                    child: SlideTransition(position: offset, child: newChild),
+                  );
+                }
+                // For the selector from normal navigation, maintain vertical slide
+                else if (newChild.key == const ValueKey('selector')) {
+                  final offset = Tween<Offset>(
+                    begin: const Offset(0, -1),
+                    end: Offset.zero,
+                  ).animate(animation);
+
+                  return ClipRect(
+                    child: SlideTransition(position: offset, child: newChild),
+                  );
+                } else {
+                  // For the chat view, no animation (stays static)
+                  return FadeTransition(opacity: animation, child: newChild);
+                }
+              },
+              child: body,
+            ),
+            // Botón flotante posicionado para que sobresalga del AppBar
+            if (!_showSelector)
+              Positioned(
+                top: 10, // Esto lo coloca parcialmente sobre el AppBar
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ??
+                              Colors.blue.shade900,
+                          Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ??
+                              Colors.deepPurple.shade900,
+                        ],
+                      ).withOpacity(0.6),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
                       ],
-                    ).withOpacity(0.6),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 2,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.group),
-                    color: Colors.white,
-                    splashRadius: 25, // Controla el tamaño del efecto de onda
-                    onPressed: () => setState(() => _showSelector = true),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.group),
+                      color: Colors.white,
+                      splashRadius: 25, // Controla el tamaño del efecto de onda
+                      onPressed: () => setState(() => _showSelector = true),
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
