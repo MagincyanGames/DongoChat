@@ -12,6 +12,7 @@ class DebugButton extends StatelessWidget {
       // transparente para no pintar fondo
       color: Colors.transparent,
       child: IconButton(
+        iconSize: 20,
         icon: const Icon(Icons.bug_report, color: Colors.white),
         tooltip: 'Debug',
         onPressed: () {

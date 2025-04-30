@@ -8,23 +8,24 @@ class ThemeToggleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    
-    return IconButton(
-      icon: Icon(
-        themeProvider.themeMode == ThemeMode.dark
-            ? Icons.wb_sunny_outlined
-            : Icons.nightlight_round,
+
+    return Material(
+      color: Colors.transparent,
+      child: IconButton(
+        icon: const Icon(Icons.brightness_6, color: Colors.white),
+        iconSize: 20,
+        constraints: BoxConstraints(),
+        onPressed: () {
+          // Don't allow changing theme while a transition is in progress
+          if (themeProvider.isChangingTheme) return;
+
+          themeProvider.setThemeMode(
+            themeProvider.themeMode == ThemeMode.dark
+                ? ThemeMode.light
+                : ThemeMode.dark,
+          );
+        },
       ),
-      onPressed: () {
-        // Don't allow changing theme while a transition is in progress
-        if (themeProvider.isChangingTheme) return;
-        
-        themeProvider.setThemeMode(
-          themeProvider.themeMode == ThemeMode.dark
-              ? ThemeMode.light
-              : ThemeMode.dark,
-        );
-      },
     );
   }
 }

@@ -144,10 +144,15 @@ class MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     Widget? body;
-
+    List<Widget> actions = [];
     // Si estamos en selector (por defecto true), mostramos la lista
     if (_showSelector) {
       body = _chatSelectorScreen();
+      actions = [
+        const ThemeToggleButton(),
+        const DebugButton(),
+        const LogoutButton(),
+      ];
     }
 
     // pantalla de chat normal
@@ -158,21 +163,24 @@ class MainScreenState extends State<MainScreen> {
 
     if (!_showSelector && _currentChat != null && user != null) {
       body = _chatScreen(user);
+       actions=[         Material(
+            color: Colors.transparent,
+            child: IconButton(
+              icon: const Icon(Icons.list),
+              onPressed: () => setState(() => _showSelector = true),
+            ),
+          ),
+          const ThemeToggleButton(),
+          const DebugButton(),
+          const LogoutButton(),
+       ];
     }
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: Text(prettify(_chatName)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.list),
-            onPressed: () => setState(() => _showSelector = true),
-          ),
-          const ThemeToggleButton(),
-          const DebugButton(),
-          const LogoutButton(),
-        ],
+        actions: actions,
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
