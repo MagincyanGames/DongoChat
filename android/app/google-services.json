@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "860054493117",
+    "project_id": "onara-6d831",
+    "storage_bucket": "onara-6d831.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:860054493117:android:7f77aacebf00def49824d4",
+        "android_client_info": {
+          "package_name": "com.magin.dongo_chat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC2a_xO81654y8Aoj1a_BBdiGdkMIB_rWA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

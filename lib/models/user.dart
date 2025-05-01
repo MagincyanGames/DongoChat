@@ -7,12 +7,15 @@ class User implements Sizeable {
   String username;
   int color; // Color representado como entero
   String? password; // Contraseña (opcional, no se almacena en la base de datos)
+  String? fcmToken; // Token de Firebase Cloud Messaging (opcional)
+
   User({
     this.id,
     required this.displayName,
     required this.username,
     required this.color,
     this.password,
+    this.fcmToken,
   });
 
   Map<String, dynamic> toMap() {
@@ -22,6 +25,7 @@ class User implements Sizeable {
       'username': username,
       'color': color,
       'password': password,
+      'fcmToken': fcmToken,
     };
   }
 

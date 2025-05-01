@@ -267,6 +267,45 @@ class ChatManager extends DatabaseManager<Chat> {
     }
   }
 
+  // Obtener el resumen de un chat específico
+  Future<ChatSummary?> getChatSummary({ObjectId? id, String? name}) async {
+    try {
+      if (id == null && name == null) {
+        throw ArgumentError("Es necesario proporcionar id o name");
+      }
+
+      final collection = await getCollectionWithRetry();
+      
+      // Crear condición de búsqueda según el parámetro proporcionado
+      final Map<String, dynamic> matchCondition = {};
+      if (id != null) {
+        matchCondition['_id'] = id;
+      } else {
+        matchCondition['name'] = name;
+      }
+      
+      // Usar el mismo pipeline que para todos los chats
+      final pipeline = [
+        {
+          '\$match': matchCondition
+        },
+        ..._createChatSummaryPipeline()
+      ];
+      
+      final results = await collection.aggregateToStream(pipeline).toList();
+      
+      // Convertir el resultado a ChatSummary
+      if (results.isNotEmpty) {
+        return _processChatSummaryResults(results).first;
+      }
+      
+      return null;
+    } catch (e) {
+      print("❌ ERROR en getChatSummary: $e");
+      return null;
+    }
+  }
+
   // Método auxiliar para calcular un "hash" de los summaries
   String _calculateSummariesHash(List<ChatSummary> summaries) {
     // Ordenamos por ID para asegurar consistencia

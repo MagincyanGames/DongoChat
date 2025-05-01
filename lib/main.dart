@@ -1,5 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:dongo_chat/api/firebase_api.dart';
 import 'package:dongo_chat/database/database_service.dart';
 import 'package:dongo_chat/database/db_managers.dart';
+import 'package:dongo_chat/firebase_options.dart';
 import 'package:dongo_chat/models/user.dart';
 import 'package:dongo_chat/providers/ThemeProvider.dart';
 import 'package:dongo_chat/providers/UserProvider.dart';
@@ -7,7 +12,11 @@ import 'package:dongo_chat/screens/chat/main_screen.dart';
 import 'package:dongo_chat/screens/login_screen.dart';
 import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:dongo_chat/widgets/theme_transition_overlay.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:googleapis_auth/auth_io.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -17,10 +26,37 @@ late String appVersion;
 
 final databaseService = DatabaseService();
 final navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<MainScreenState> mainScreenKey = GlobalKey<MainScreenState>();
+
+Future<String> getAccessToken() async {
+  // Cargar el archivo JSON desde los assets
+  final jsonString = await rootBundle.loadString('assets/credentials.json');
+
+  // Convertir el contenido JSON en un Map
+  final Map<String, dynamic> serviceAccount = json.decode(jsonString);
+
+  // Usar el contenido para crear las credenciales de la cuenta de servicio
+  final credentials = ServiceAccountCredentials.fromJson(serviceAccount);
+
+  // Los scopes que necesitas para FCM
+  final scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
+
+  // Obtener el token de acceso usando el cliente de OAuth2
+  final client = await clientViaServiceAccount(credentials, scopes);
+
+  // Retornar el token de acceso
+  return client.credentials.accessToken.data;
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  if (Platform.isAndroid) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await FirebaseApi().initNotifications();
+  }
   // Get version from pubspec.yaml
   final packageInfo = await PackageInfo.fromPlatform();
   appVersion = packageInfo.version;
@@ -94,6 +130,15 @@ class _MainAppState extends State<MainApp> {
           if (doc != null) {
             doc.password = pwdHash;
             context.read<UserProvider>().user = doc;
+
+            if (Platform.isAndroid) {
+              var tkn = await FirebaseMessaging.instance.getToken();
+              if (tkn != null && doc.fcmToken != doc.fcmToken) {
+                // Actualiza el token en la base de datos
+                await DBManagers.user.update(doc.id!, doc);
+              }
+            }
+
             return doc;
           }
         }

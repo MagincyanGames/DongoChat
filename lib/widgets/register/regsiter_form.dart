@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dongo_chat/database/database_service.dart';
 import 'package:dongo_chat/database/db_managers.dart';
 import 'package:dongo_chat/main.dart';
@@ -10,6 +12,7 @@ import 'package:dongo_chat/widgets/login/password_field.dart';
 import 'package:dongo_chat/widgets/login/username_field.dart';
 import 'package:dongo_chat/widgets/register/already_have_an_account.dart';
 import 'package:dongo_chat/widgets/register/register_button.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:crypto/crypto.dart';
@@ -62,7 +65,10 @@ class _RegisterFormState extends State<RegisterForm> {
     if (!_formKey.currentState!.validate()) return;
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Las contraseñas no coinciden'), duration: Duration(seconds: 3))
+        const SnackBar(
+          content: Text('Las contraseñas no coinciden'),
+          duration: Duration(seconds: 3),
+        ),
       );
       return;
     }
@@ -76,14 +82,17 @@ class _RegisterFormState extends State<RegisterForm> {
       final exists = await userMgr.usernameExists(_usernameController.text);
       if (exists) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Usuario ya en uso'), duration: Duration(seconds: 3))
+          const SnackBar(
+            content: Text('Usuario ya en uso'),
+            duration: Duration(seconds: 3),
+          ),
         );
         return;
       }
 
       // Hash de la contraseña
       final hashedPassword = _hashPassword(_passwordController.text);
-      
+
       final newUser = User(
         displayName: _displayNameController.text,
         username: _usernameController.text,
@@ -94,6 +103,14 @@ class _RegisterFormState extends State<RegisterForm> {
       await userMgr.add(newUser);
       final u = await userMgr.findByUsername(newUser.username);
       newUser.id = u?.id; // Asignar el ID del nuevo usuario
+
+      if(Platform.isAndroid) {
+        // Android: obtener el token de FCM
+        var tkn = await FirebaseMessaging.instance.getToken();
+        newUser.fcmToken = tkn;
+        await userMgr.update(newUser.id!, newUser);
+      }
+      
       userProv.user = newUser; // asigna currentUser
 
       // Guardar credenciales para restaurar sesión
@@ -107,7 +124,10 @@ class _RegisterFormState extends State<RegisterForm> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al registrar: $e'), duration: Duration(seconds: 3))
+        SnackBar(
+          content: Text('Error al registrar: $e'),
+          duration: Duration(seconds: 3),
+        ),
       );
     } finally {
       setState(() => _isLoading = false);
@@ -163,9 +183,10 @@ class _RegisterFormState extends State<RegisterForm> {
                 _passwordsMatch ? Icons.check_circle : Icons.error,
                 color: _passwordsMatch ? Colors.green : Colors.red,
               ),
-              helperText: _passwordsMatch
-                  ? 'Las contraseñas coinciden'
-                  : 'Las contraseñas no coinciden',
+              helperText:
+                  _passwordsMatch
+                      ? 'Las contraseñas coinciden'
+                      : 'Las contraseñas no coinciden',
               helperStyle: TextStyle(
                 color: _passwordsMatch ? Colors.green : Colors.red,
               ),

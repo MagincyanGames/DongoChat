@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'package:dongo_chat/api/firebase_api.dart';
 import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -218,6 +219,12 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
         text,
         widget.currentUser?.id ?? ObjectId(),
         messageData,
+      );
+
+      await FirebaseApi().sendNotification(
+        widget.chat.name!,
+        text,
+        widget.chat.id!,
       );
 
       setState(() => messageData = MessageData());

@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dongo_chat/database/database_service.dart';
@@ -35,7 +38,6 @@ class _LoginFormState extends State<LoginForm> {
 
   // Método para cifrar la contraseña
 
-
   void _attemptLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
@@ -46,19 +48,29 @@ class _LoginFormState extends State<LoginForm> {
 
     try {
       final hashed = CryptoUtils.makeHash(_passwordController.text);
-      final ok = await userMgr.authenticateUser(_usernameController.text, hashed);
+      final ok = await userMgr.authenticateUser(
+        _usernameController.text,
+        hashed,
+      );
 
       if (ok) {
         // Carga el usuario completo
         final doc = await userMgr.findByUsername(_usernameController.text);
         if (doc != null) {
-          doc.password = hashed; // Asegúrate de que la contraseña cifrada se guarde
+          doc.password =
+              hashed; // Asegúrate de que la contraseña cifrada se guarde
           userProv.user = doc;
 
           // Guardar credenciales para restaurar sesión
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('username', _usernameController.text);
           await prefs.setString('password', hashed);
+
+          if (Platform.isAndroid) {
+            var tkn = await FirebaseMessaging.instance.getToken();
+            doc.fcmToken = tkn;
+            await userMgr.update(doc.id!, doc);
+          }
         }
 
         // Navega a MainScreen y limpia la pila
@@ -68,12 +80,18 @@ class _LoginFormState extends State<LoginForm> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Credenciales incorrectas'), duration: Duration(seconds: 3))
+          const SnackBar(
+            content: Text('Credenciales incorrectas'),
+            duration: Duration(seconds: 3),
+          ),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al iniciar sesión: $e'), duration: Duration(seconds: 3))
+        SnackBar(
+          content: Text('Error al iniciar sesión: $e'),
+          duration: Duration(seconds: 3),
+        ),
       );
     } finally {
       setState(() => _isLoading = false);
@@ -91,8 +109,8 @@ class _LoginFormState extends State<LoginForm> {
           PasswordField(controller: _passwordController),
           const SizedBox(height: 24),
           _isLoading
-            ? const CircularProgressIndicator()
-            : LoginButton(onPressed: _attemptLogin),
+              ? const CircularProgressIndicator()
+              : LoginButton(onPressed: _attemptLogin),
         ],
       ),
     );

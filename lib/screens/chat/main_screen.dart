@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:dongo_chat/database/database_service.dart';
 import 'package:dongo_chat/database/db_managers.dart';
 import 'package:dongo_chat/database/managers/chat_manager.dart';
@@ -19,7 +21,7 @@ import 'package:provider/provider.dart';
 import 'dart:async';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({Key? key}) : super(key: key);
+  const MainScreen({super.key});
 
   @override
   State<MainScreen> createState() => MainScreenState();
@@ -29,6 +31,7 @@ class MainScreenState extends State<MainScreen> {
   // Add a key variable to track state changes
   int _selectorRebuildCounter = 0;
   bool _navigatingBackWithGesture = false;
+  bool _navigatingForwardToChat = false; // Add this new flag
 
   late final ChatManager _chatManager;
   late final DatabaseService _dbService;
@@ -52,11 +55,22 @@ class MainScreenState extends State<MainScreen> {
     _dbService = Provider.of<DatabaseService>(context, listen: false);
     _chatManager = DBManagers.chat;
 
-    // Cargar summaries inmediatamente
-    _loadChatSummaries();
-
+    // Process route arguments if any
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args != null && args is Map<String, dynamic>) {
+        if (args.containsKey('connectTo')) {
+          final chatId = args['connectTo'] as ObjectId;
+          print("MainScreen: Connecting to chat ${chatId.toHexString()}");
+          _connectToChat(chatId);
+        }
+      } else {
+        // Si no hay argumentos, inicializamos el chat normalmente
+        _loadChatSummaries();
+      }
+    });
     // Configurar un timer para verificar nuevos chats periódicamente
-    Timer.periodic(const Duration(seconds: 20), (_) {
+    Timer.periodic(const Duration(seconds: 10), (_) {
       if (_showSelector && mounted) {
         _checkForChatUpdates();
       }
@@ -178,23 +192,37 @@ class MainScreenState extends State<MainScreen> {
     return withSpaces[0].toUpperCase() + withSpaces.substring(1);
   }
 
+  void setChatName(String name) {
+    setState(() {
+      _chatName = name;
+    });
+  }
+
+  void selectChat(ChatSummary chat) {
+    var reload = _chatId != chat.id;
+    setState(() {
+      _chatId = chat.id;
+      _chatName = chat.name;
+      _showSelector = false;
+      _navigatingForwardToChat = true; // Set flag for forward animation
+    });
+
+    // Reset the flag after animation completes
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() => _navigatingForwardToChat = false);
+    });
+
+    // After selection, initialize the chat
+    if (reload) _initializeChat();
+  }
+
   Widget _chatSelectorScreen() {
     return _loadingSummaries
         ? const Center(child: CircularProgressIndicator())
         : ChatSelectionScreen(
           key: const ValueKey('selector'), // Añadir clave explícita aquí
           chatSummaries: _chatSummaries,
-          onChatSelected: (chat) {
-            var reload = _chatId != chat.id;
-            setState(() {
-              _chatId = chat.id;
-              _chatName = chat.name;
-              _showSelector = false;
-            });
-
-            // Tras seleccionar, inicializamos el chat
-            if (reload) _initializeChat();
-          },
+          onChatSelected: selectChat,
         );
   }
 
@@ -314,10 +342,10 @@ class MainScreenState extends State<MainScreen> {
                 Widget newChild,
                 Animation<double> animation,
               ) {
-                // Para el selector que se muestra normalmente (botón de grupo o inicio)
-                if (newChild is ChatSelectionScreen ||
+                if ((newChild is ChatSelectionScreen ||
                     (newChild.key is ValueKey &&
-                        (newChild.key as ValueKey).value == 'selector')) {
+                        (newChild.key as ValueKey).value == 'selector')) && 
+                    _navigatingBackWithGesture) {
                   final offset = Tween<Offset>(
                     begin: const Offset(0, -1), // Deslizar desde arriba
                     end: Offset.zero,
@@ -327,10 +355,8 @@ class MainScreenState extends State<MainScreen> {
                     child: SlideTransition(position: offset, child: newChild),
                   );
                 }
-                // Fallback para otros widgets
-                else {
-                  return FadeTransition(opacity: animation, child: newChild);
-                }
+                // Add a fallback for when we're not transitioning
+                return FadeTransition(opacity: animation, child: newChild);
               },
               child: body,
             ),
@@ -380,7 +406,14 @@ class MainScreenState extends State<MainScreen> {
                         onTap: () {
                           _loadChatSummaries();
                           setState(() {
+                            _navigatingBackWithGesture = true; // Add this line to enable the animation
                             _showSelector = true;
+                            _selectorRebuildCounter++; // Force rebuild
+                          });
+                          
+                          // Reset the flag after animation completes
+                          Future.delayed(const Duration(milliseconds: 300), () {
+                            if (mounted) setState(() => _navigatingBackWithGesture = false);
                           });
                         },
                         child: const Center(
@@ -399,6 +432,27 @@ class MainScreenState extends State<MainScreen> {
         ),
       ),
     );
+  }
+
+  // Add this helper method to connect to a specific chat
+  Future<void> _connectToChat(ObjectId chatId) async {
+    try {
+      // Get chat summary
+      final summary = await _chatManager.getChatSummary(id: chatId);
+      if (summary == null) return;
+
+      // Select the chat
+      setState(() {
+        _chatId = chatId;
+        _chatName = summary.name;
+        _showSelector = false;
+      });
+
+      // Initialize the chat
+      await _initializeChat();
+    } catch (e) {
+      print("Error connecting to chat: $e");
+    }
   }
 }
 
