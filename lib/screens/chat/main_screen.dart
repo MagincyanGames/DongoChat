@@ -25,7 +25,8 @@ class MainScreen extends StatefulWidget {
 }
 
 class MainScreenState extends State<MainScreen> {
-  // Add this flag
+  // Add a key variable to track state changes
+  int _selectorRebuildCounter = 0;
   bool _navigatingBackWithGesture = false;
 
   late final ChatManager _chatManager;
@@ -35,10 +36,11 @@ class MainScreenState extends State<MainScreen> {
   final GlobalKey<ChatViewState> _chatViewKey = GlobalKey<ChatViewState>();
 
   // El chat actual
+  String? _chatName;
   Chat? _currentChat;
 
   // Nombre predeterminado del chat
-  var _chatName = 'general';
+  ObjectId? _chatId;
   // Cambiamos el valor inicial para que abra primero el selector
   bool _showSelector = true;
 
@@ -48,15 +50,21 @@ class MainScreenState extends State<MainScreen> {
     _dbService = Provider.of<DatabaseService>(context, listen: false);
     _chatManager = DBManagers.chat;
     // ----------> Añadido: precalentar la conexión/inicialización del chat por defecto
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeChat();
-    });
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   _initializeChat();
+    // });
   }
 
   Future<void> _initializeChat() async {
+    if (_chatId == null) {
+      // Si no hay chat seleccionado, mostramos el selector
+      setState(() => _showSelector = true);
+      return;
+    }
+
     try {
       // Inicializar el chat
-      final chat = await _chatManager.initChat(_chatName);
+      final chat = await _chatManager.initChat(_chatId!);
 
       if (mounted) {
         setState(() {
@@ -81,9 +89,18 @@ class MainScreenState extends State<MainScreen> {
     MessageData? messageData,
   ) async {
     setState(() => _isLoading = true);
+
+    if (_chatId == null) {
+      // Si no hay chat seleccionado, mostramos el selector
+      setState(() => _showSelector = true);
+      setState(() => _isLoading = false);
+
+      return;
+    }
+
     try {
       // Enviar mensaje al chat actual
-      await _chatManager.addMessageToChat(_chatName, text, userId, messageData);
+      await _chatManager.addMessageToChat(_chatId!, text, userId, messageData);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -93,7 +110,7 @@ class MainScreenState extends State<MainScreen> {
 
   Future<bool> _handleRefreshMessages() async {
     if (_currentChat == null) return false;
-    return await _chatManager.checkForNewMessages(_chatName);
+    return await _chatManager.checkForNewMessages(_chatId!);
   }
 
   // Métodos expuestos para compatibilidad con código existente
@@ -116,15 +133,19 @@ class MainScreenState extends State<MainScreen> {
   }
 
   Widget _chatSelectorScreen() {
+    // Use a key that changes each time to force rebuild
     return ChatSelectionScreen(
-      key: const ValueKey('selector'),
-      onChatSelected: (name) {
+      key: ValueKey('selector_${_selectorRebuildCounter}'),
+      onChatSelected: (chat) {
+        var reload = _chatId != chat.id;
         setState(() {
-          _chatName = name;
+          _chatId = chat.id;
+          _chatName = chat.name;
           _showSelector = false;
         });
+
         // Tras seleccionar, inicializamos el chat
-        _initializeChat();
+        if (reload) _initializeChat();
       },
     );
   }
@@ -135,7 +156,7 @@ class MainScreenState extends State<MainScreen> {
 
   Widget _chatScreen(User user) {
     return ChatView(
-      key: ValueKey(_chatName), // forzar rebuild al cambiar chat
+      key: ValueKey(_chatId), // forzar rebuild al cambiar chat
       chat: _currentChat!,
       currentUser: user,
       onSendMessage: _handleSendMessage,
@@ -160,7 +181,7 @@ class MainScreenState extends State<MainScreen> {
 
     // pantalla de chat normal
     final user = context.watch<UserProvider>().user;
-    if (_currentChat == null) {
+    if (_currentChat == null && !_showSelector) {
       body = _loadding();
     }
 
@@ -180,8 +201,9 @@ class MainScreenState extends State<MainScreen> {
           setState(() {
             _navigatingBackWithGesture = true; // Set flag for back navigation
             _showSelector = true;
+            _selectorRebuildCounter++; // Increment counter to force rebuild
           });
-          
+
           // Reset the flag after animation completes
           Future.delayed(const Duration(milliseconds: 300), () {
             if (mounted) setState(() => _navigatingBackWithGesture = false);
@@ -191,7 +213,9 @@ class MainScreenState extends State<MainScreen> {
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
-          title: Text(prettify(_chatName)),
+          title: Text(
+            _showSelector ? 'DongoChat - $appVersion' : prettify(_chatName ?? 'Unnamed Chat'),
+          ),
           actions: actions,
           flexibleSpace: Container(
             decoration: BoxDecoration(
@@ -220,9 +244,14 @@ class MainScreenState extends State<MainScreen> {
               duration: const Duration(milliseconds: 300),
               switchInCurve: Curves.easeOut,
               switchOutCurve: Curves.easeIn,
-              transitionBuilder: (Widget newChild, Animation<double> animation) {
+              transitionBuilder: (
+                Widget newChild,
+                Animation<double> animation,
+              ) {
                 // For the selector coming from back button, use horizontal slide
-                if (newChild.key == const ValueKey('selector') && _navigatingBackWithGesture) {
+                if (newChild.key ==
+                        ValueKey('selector_${_selectorRebuildCounter}') &&
+                    _navigatingBackWithGesture) {
                   final offset = Tween<Offset>(
                     begin: const Offset(-1, 0), // Slide from left to right
                     end: Offset.zero,
@@ -233,7 +262,8 @@ class MainScreenState extends State<MainScreen> {
                   );
                 }
                 // For the selector from normal navigation, maintain vertical slide
-                else if (newChild.key == const ValueKey('selector')) {
+                else if (newChild.key ==
+                    ValueKey('selector_${_selectorRebuildCounter}')) {
                   final offset = Tween<Offset>(
                     begin: const Offset(0, -1),
                     end: Offset.zero,
@@ -263,9 +293,15 @@ class MainScreenState extends State<MainScreen> {
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                         colors: [
-                          Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ??
+                          Theme.of(context)
+                                  .extension<ChatTheme>()
+                                  ?.otherMessageGradient
+                                  .last ??
                               Colors.blue.shade900,
-                          Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ??
+                          Theme.of(context)
+                                  .extension<ChatTheme>()
+                                  ?.myMessageGradient
+                                  .first ??
                               Colors.deepPurple.shade900,
                         ],
                       ).withOpacity(0.6),
@@ -281,7 +317,11 @@ class MainScreenState extends State<MainScreen> {
                       icon: const Icon(Icons.group),
                       color: Colors.white,
                       splashRadius: 25, // Controla el tamaño del efecto de onda
-                      onPressed: () => setState(() => _showSelector = true),
+                      onPressed:
+                          () => setState(() {
+                            _showSelector = true;
+                            _selectorRebuildCounter++; // Increment counter to force rebuild
+                          }),
                     ),
                   ),
                 ),

@@ -2,6 +2,15 @@ import 'package:mongo_dart/mongo_dart.dart';
 import 'package:dongo_chat/models/message.dart';
 import 'package:dongo_chat/models/sizeable.dart';
 
+// Simple class to hold chat summary information
+class ChatSummary {
+  final ObjectId id;
+  final String name;
+  final Message? latestMessage;
+
+  ChatSummary({required this.id, required this.name, this.latestMessage});
+}
+
 class Chat implements Sizeable {
   final ObjectId? id;
   final String? name;
@@ -42,24 +51,28 @@ class Chat implements Sizeable {
   int get size {
     int total = 0;
 
-    // Overhead base del objeto Chat
+    // Base object overhead
     total += 16;
 
-    // id (ObjectId) si no es null
+    // id (ObjectId) if not null
     if (id != null) {
-      total += 40; // 12 bytes reales + overhead
+      total += 40; // 12 bytes real + overhead
     }
 
-    // name (String) si no es null
+    // name (String) if not null
     if (name != null) {
-      total += 8; // puntero
-      total += name!.length * 2; // 2 bytes por carácter
+      total += 8; // pointer
+      total += name!.length * 2; // UTF-16 encoding
     }
 
     // messages (List<Message>)
-    total += 16; // Overhead de la lista
+    total += 16; // List overhead
+    // Add overhead for each list slot (not just filled ones)
+    total += 8 * messages.length; // 8 bytes per list element pointer
+    
+    // Add size of each message
     for (var message in messages) {
-      total += message.size; // El tamaño de cada Message
+      total += message.size;
     }
 
     return total;

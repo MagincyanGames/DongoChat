@@ -24,13 +24,28 @@ class MessageData implements Sizeable {
 
   @override
   int get size {
-    var total = 0;
-
-    // id (ObjectId) si no es null
+    int total = 0;
+    
+    // Base object overhead
+    total += 16;
+    
+    // resend (ObjectId) if not null
     if (resend != null) {
-      total += 40; // 12 bytes reales + overhead
+      total += 40; // 12 bytes real + overhead
     }
-
+    
+    // url (String) if not null
+    if (url != null) {
+      total += 8; // pointer
+      total += url!.length * 2; // UTF-16 encoding
+    }
+    
+    // type (String) if not null
+    if (type != null) {
+      total += 8; // pointer
+      total += type!.length * 2; // UTF-16 encoding
+    }
+    
     return total;
   }
 }

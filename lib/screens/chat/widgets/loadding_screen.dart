@@ -9,6 +9,9 @@ class LoadingChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print('Loadding chat screen');
+    Future.microtask(onRetry);
+
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 

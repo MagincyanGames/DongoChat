@@ -3,7 +3,7 @@ import 'package:dongo_chat/database/database_service.dart';
 import 'package:dongo_chat/database/managers/cached_data.dart';
 import 'package:dongo_chat/models/sizeable.dart';
 
-abstract class DatabaseManager<T extends Sizeable> implements Sizeable{
+abstract class DatabaseManager<T extends Sizeable> implements Sizeable {
   final DatabaseService _databaseService;
   final _cache = CachedData();
 
@@ -15,6 +15,8 @@ abstract class DatabaseManager<T extends Sizeable> implements Sizeable{
   String get collectionName;
   T fromMap(Map<String, dynamic> map);
   Map<String, dynamic> toMap(T item);
+
+  bool get useCache;
 
   Future<DbCollection> getCollectionWithRetry() async {
     int attempts = 0;
@@ -65,27 +67,27 @@ abstract class DatabaseManager<T extends Sizeable> implements Sizeable{
     return await find();
   }
 
+  //* Cached
   Future<T?> findById(ObjectId? id) async {
     if (id == null) {
       return null;
     }
-
-    final T? cached = _cache.getCached(id) as T?;
-    if (cached != null) {
-      return cached;
+    if (useCache) {
+      final T? cached = _cache.getCached(id) as T?;
+      if (cached != null) {
+        return cached;
+      }
     }
-
     final collection = await getCollectionWithRetry();
 
     final document = await collection.findOne(where.id(id));
 
     if (document != null) {
-    } else {
-    }
+    } else {}
 
     T? result = document != null ? fromMap(document) : null;
 
-    if (result != null) {
+    if (useCache && result != null) {
       _cache.storeCached(id, result);
     }
     return result;
@@ -142,8 +144,7 @@ abstract class DatabaseManager<T extends Sizeable> implements Sizeable{
     final collection = await getCollectionWithRetry();
     return await collection.count(filter ?? {});
   }
-  
+
   @override
   int get size => _cache.size;
-
 }

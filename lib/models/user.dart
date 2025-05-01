@@ -29,29 +29,29 @@ class User implements Sizeable {
   int get size {
     int total = 0;
 
-    // Estimación del overhead base de objeto en Dart
+    // Base object overhead
     total += 16;
 
-    // ObjectId (si no es null)
+    // id (ObjectId) if not null
     if (id != null) {
-      total += 40; // 12 bytes reales + 28 bytes aproximados de overhead
+      total += 40; // 12 bytes real + overhead
     }
 
     // color (int)
     total += 8;
 
-    // displayName
-    total += 8; // puntero
-    total += displayName.length * 2;
+    // displayName (String)
+    total += 8; // pointer
+    total += displayName.length * 2; // UTF-16 encoding
 
-    // username
-    total += 8; // puntero
-    total += username.length * 2;
+    // username (String)
+    total += 8; // pointer
+    total += username.length * 2; // UTF-16 encoding
 
-    // password (si no es null)
+    // password (String) if not null
     if (password != null) {
-      total += 8; // puntero
-      total += password!.length * 2;
+      total += 8; // pointer
+      total += password!.length * 2; // UTF-16 encoding
     }
 
     return total;

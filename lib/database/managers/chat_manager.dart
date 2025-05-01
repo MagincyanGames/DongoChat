@@ -12,6 +12,10 @@ class ChatManager extends DatabaseManager<Chat> {
   @override
   String get collectionName => "Chats";
 
+  
+  @override
+  bool get useCache => false;
+
   @override
   fromMap(Map<String, dynamic> map) => Chat.fromMap(map);
 
@@ -19,7 +23,7 @@ class ChatManager extends DatabaseManager<Chat> {
   Map<String, dynamic> toMap(item) => item.toMap();
 
   // Mapa para mantener chats cargados en memoria
-  final Map<String, Chat> _loadedChats = {};
+  final Map<ObjectId, Chat> _loadedChats = {};
 
   // Verifica si un chat está cargado
   bool isChatLoaded(String chatName) => _loadedChats.containsKey(chatName);
@@ -29,10 +33,10 @@ class ChatManager extends DatabaseManager<Chat> {
 
   // Añade mensaje a cualquier chat
   Future<void> addMessageToChat(
-      String chatName, String text, ObjectId? sender, MessageData? data) async {
-    final chat = _loadedChats[chatName];
+      ObjectId chatId, String text, ObjectId? sender, MessageData? data) async {
+    final chat = _loadedChats[chatId];
     if (chat == null) {
-      throw Exception("Chat no inicializado: $chatName");
+      throw Exception("Chat no inicializado: $chatId");
     }
 
     // 1. Cifrar el contenido
@@ -51,7 +55,7 @@ class ChatManager extends DatabaseManager<Chat> {
     // 3. Guardar en BD
     final collection = await getCollectionWithRetry();
     await collection.update(
-      {'name': chatName},
+      {'_id': chatId},
       {r'$push': {'messages': message.toMap()}},
     );
 
@@ -67,22 +71,63 @@ class ChatManager extends DatabaseManager<Chat> {
   }
 
   // Verifica nuevos mensajes para cualquier chat
-  Future<bool> checkForNewMessages(String chatName) async {
-    final chat = _loadedChats[chatName];
+  Future<bool> checkForNewMessages(ObjectId chatId) async {
+    final chat = _loadedChats[chatId];
     if (chat == null) return false;
     
     try {
       final collection = await getCollectionWithRetry();
-      final dbChat = await collection.findOne({'name': chatName});
-      if (dbChat == null) return false;
-
-      // Chat.fromMap ya descifra los mensajes internamente
-      final newChat = Chat.fromMap(dbChat);
-
-      if (!_areMessagesEqual(chat.messages, newChat.messages)) {
+      
+      // Use aggregation to get only the latest message
+      final pipeline = [
+        {
+          '\$match': {'_id': chatId}
+        },
+        {
+          '\$project': {
+            'latestMessage': {
+              '\$arrayElemAt': [
+                {'\$sortArray': {
+                  'input': '\$messages',
+                  'sortBy': {'timestamp': -1}
+                }},
+                0
+              ]
+            }
+          }
+        }
+      ];
+      
+      final result = await collection.aggregateToStream(pipeline).toList();
+      
+      // If no results or no latest message, nothing to update
+      if (result.isEmpty || !result[0].containsKey('latestMessage')) {
+        return false;
+      }
+      
+      final latestMessageMap = result[0]['latestMessage'];
+      final latestMessageId = latestMessageMap['_id'] as ObjectId;
+      
+      // Check if this message is already in our loaded chat
+      bool messageExists = false;
+      for (var message in chat.messages) {
+        if (message.id == latestMessageId) {
+          messageExists = true;
+          break;
+        }
+      }
+      
+      // If message doesn't exist, reload the entire chat
+      if (!messageExists) {
+        final dbChat = await collection.findOne({'_id': chatId});
+        if (dbChat == null) return false;
+        
+        // Update the chat with new messages
+        final newChat = Chat.fromMap(dbChat);
         chat.messages = newChat.messages;
         return true;
       }
+      
       return false;
     } catch (e) {
       print("❌ Error al comprobar mensajes: $e");
@@ -91,28 +136,21 @@ class ChatManager extends DatabaseManager<Chat> {
   }
 
   // Inicializa cualquier chat
-  Future<Chat?> initChat(String chatName) async {
+  Future<Chat?> initChat(ObjectId chatId) async {
+    print("🔄 Inicializando chat: $chatId");
     // Si ya está cargado, devolver el chat existente
-    if (_loadedChats.containsKey(chatName)) {
-      return _loadedChats[chatName];
+    if (_loadedChats.containsKey(chatId)) {
+      return _loadedChats[chatId];
     }
     
     try {
       final collection = await getCollectionWithRetry();
-      final existing = await collection.findOne({'name': chatName});
-      
-      Chat chat;
-      if (existing != null) {
-        // Chat.fromMap maneja la desencriptación
-        chat = Chat.fromMap(existing);
-      } else {
-        // Crear nuevo chat
-        chat = Chat(name: chatName, messages: []);
-        await collection.insert(chat.toMap());
-      }
+      final existing = await collection.findOne({'_id': chatId});
+
+      Chat chat = Chat.fromMap(existing!);
       
       // Almacenar en el mapa de chats cargados
-      _loadedChats[chatName] = chat;
+      _loadedChats[chatId] = chat;
       return chat;
     } catch (e) {
       print("❌ ERROR en initChat: $e");
@@ -126,5 +164,107 @@ class ChatManager extends DatabaseManager<Chat> {
       if (a[i].id != b[i].id) return false;
     }
     return true;
+  }
+
+  // Get the latest message for a specific chat
+  Future<Message?> getLatestMessage(String chatName) async {
+    try {
+      final collection = await getCollectionWithRetry();
+      
+      // Use aggregation pipeline to get the chat with only the latest message
+      final pipeline = [
+        {
+          '\$match': {'name': chatName}
+        },
+        {
+          '\$project': {
+            '_id': 1,
+            'name': 1,
+            'latestMessage': {
+              '\$arrayElemAt': [
+                {'\$sortArray': {
+                  'input': '\$messages',
+                  'sortBy': {'timestamp': -1}
+                }},
+                0
+              ]
+            }
+          }
+        }
+      ];
+      
+      final result = await collection.aggregateToStream(pipeline).toList();
+      
+      if (result.isNotEmpty && result[0].containsKey('latestMessage')) {
+        final rawMessage = result[0]['latestMessage'];
+        
+        // Create and decrypt the message
+        final message = Message.fromMap(rawMessage);
+        
+        // The message will be encrypted, ensure we decrypt it
+        if (message.iv != null && message.iv!.isNotEmpty) {
+          message.message = CryptoUtils.decryptString(message.message,message.iv);
+        }
+        
+        return message;
+      }
+      
+      return null;
+    } catch (e) {
+      print("❌ ERROR in getLatestMessage: $e");
+      return null;
+    }
+  }
+
+  // Get all chat summaries with their latest messages
+  Future<List<ChatSummary>> findAllChatSummaries() async {
+    try {
+      final collection = await getCollectionWithRetry();
+      
+      // Project each chat with just its name and latest message
+      final pipeline = [
+        {
+          '\$project': {
+            '_id': 1,
+            'name': 1,
+            'latestMessage': {
+              '\$cond': {
+                'if': {'\$gt': [{'\$size': '\$messages'}, 0]},
+                'then': {
+                  '\$arrayElemAt': [
+                    {'\$sortArray': {
+                      'input': '\$messages',
+                      'sortBy': {'timestamp': -1}
+                    }},
+                    0
+                  ]
+                },
+                'else': null
+              }
+            }
+          }
+        }
+      ];
+      
+      final results = await collection.aggregateToStream(pipeline).toList();
+      
+      return results.map((doc) {
+        final name = doc['name'] as String;
+        Message? latestMessage;
+        
+        if (doc.containsKey('latestMessage') && doc['latestMessage'] != null) {
+          latestMessage = Message.fromMap(doc['latestMessage']);
+        }
+        
+        return ChatSummary(
+          id: doc['_id'] as ObjectId,
+          name: name,
+          latestMessage: latestMessage,
+        );
+      }).toList();
+    } catch (e) {
+      print("❌ ERROR in getAllChatSummaries: $e");
+      return [];
+    }
   }
 }

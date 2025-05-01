@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 import 'package:provider/provider.dart';
 import 'package:dongo_chat/models/chat.dart';
 import 'package:dongo_chat/database/db_managers.dart';
 import 'package:dongo_chat/theme/chat_theme.dart';
 
 class ChatSelectionScreen extends StatefulWidget {
-  final ValueChanged<String> onChatSelected;
+  final ValueChanged<ChatSummary> onChatSelected;
   const ChatSelectionScreen({Key? key, required this.onChatSelected})
     : super(key: key);
 
@@ -13,13 +14,33 @@ class ChatSelectionScreen extends StatefulWidget {
   State<ChatSelectionScreen> createState() => _ChatSelectionScreenState();
 }
 
-class _ChatSelectionScreenState extends State<ChatSelectionScreen> {
-  late Future<List<Chat>> _chatsFuture;
+class _ChatSelectionScreenState extends State<ChatSelectionScreen> with WidgetsBindingObserver {
+  late Future<List<ChatSummary>> _chatsFuture;
 
   @override
   void initState() {
     super.initState();
-    _chatsFuture = DBManagers.chat.findAll();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshChatsList();
+  }
+  
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshChatsList();
+    }
+  }
+  
+  void _refreshChatsList() {
+    setState(() {
+      _chatsFuture = DBManagers.chat.findAllChatSummaries();
+    });
   }
 
   String _prettify(String input) {
@@ -44,7 +65,7 @@ class _ChatSelectionScreenState extends State<ChatSelectionScreen> {
           ],
         ).withOpacity(0.6),
       ),
-      child: FutureBuilder<List<Chat>>(
+      child: FutureBuilder<List<ChatSummary>>(
         future: _chatsFuture,
         builder: (ctx, snap) {
           if (snap.connectionState != ConnectionState.done) {
@@ -61,16 +82,15 @@ class _ChatSelectionScreenState extends State<ChatSelectionScreen> {
             itemBuilder: (_, i) {
               final chat = chats[i];
               final name = _prettify(chat.name ?? 'Unnamed');
+              
               return Material(
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
                   splashColor:
-                      chatTheme?.otherQuotedMessageBorderColor?.withOpacity(
-                        0.3,
-                      ) ??
+                      chatTheme?.otherQuotedMessageBorderColor?.withOpacity(0.3) ??
                       theme.colorScheme.primary.withOpacity(0.3),
-                  onTap: () => widget.onChatSelected(chat.name!),
+                  onTap: () => widget.onChatSelected(chat),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -90,11 +110,28 @@ class _ChatSelectionScreenState extends State<ChatSelectionScreen> {
                         ),
                       ),
                     ),
-                    child: Text(
-                      name,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (chat.latestMessage != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            chat.latestMessage!.message,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                              fontStyle: FontStyle.italic,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            maxLines: 1,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),

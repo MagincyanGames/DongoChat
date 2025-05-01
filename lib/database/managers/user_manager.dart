@@ -10,6 +10,9 @@ class UserManager extends DatabaseManager<User>{
   String get collectionName => 'Users';
   
   @override
+  bool get useCache => true;
+  
+  @override
   User fromMap(Map<String, dynamic> map) {
     // id suele ser un ObjectId, lo convertimos a String
     final id = map['_id'];
