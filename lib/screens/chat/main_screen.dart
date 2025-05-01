@@ -16,6 +16,7 @@ import 'package:dongo_chat/screens/chat/chat_selection_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 import 'package:provider/provider.dart';
+import 'dart:async';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -38,21 +39,60 @@ class MainScreenState extends State<MainScreen> {
   // El chat actual
   String? _chatName;
   Chat? _currentChat;
-
-  // Nombre predeterminado del chat
   ObjectId? _chatId;
-  // Cambiamos el valor inicial para que abra primero el selector
   bool _showSelector = true;
+
+  // Almacenar los summaries en el estado principal
+  List<ChatSummary> _chatSummaries = [];
+  bool _loadingSummaries = true;
 
   @override
   void initState() {
     super.initState();
     _dbService = Provider.of<DatabaseService>(context, listen: false);
     _chatManager = DBManagers.chat;
-    // ----------> Añadido: precalentar la conexión/inicialización del chat por defecto
-    // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //   _initializeChat();
-    // });
+
+    // Cargar summaries inmediatamente
+    _loadChatSummaries();
+
+    // Configurar un timer para verificar nuevos chats periódicamente
+    Timer.periodic(const Duration(seconds: 20), (_) {
+      if (_showSelector && mounted) {
+        _checkForChatUpdates();
+      }
+    });
+  }
+
+  // Método para verificar actualizaciones en los chats
+  Future<void> _checkForChatUpdates() async {
+    final hasChanges = await _chatManager.checkForNewChats(_chatSummaries);
+    if (hasChanges && mounted) {
+      // Solo recargamos si hay cambios
+      _loadChatSummaries();
+    }
+  }
+
+  // Método para cargar los summaries
+  Future<void> _loadChatSummaries() async {
+    setState(() => _loadingSummaries = true);
+
+    try {
+      final summaries = await _chatManager.findAllChatSummaries();
+
+      if (mounted) {
+        setState(() {
+          _chatSummaries = summaries;
+          _loadingSummaries = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loadingSummaries = false;
+          _debugError = "Error cargando los chats: ${e.toString()}";
+        });
+      }
+    }
   }
 
   Future<void> _initializeChat() async {
@@ -110,6 +150,12 @@ class MainScreenState extends State<MainScreen> {
 
   Future<bool> _handleRefreshMessages() async {
     if (_currentChat == null) return false;
+
+    // Si estamos en el selector, también actualizamos los summaries
+    if (_showSelector) {
+      await _loadChatSummaries();
+    }
+
     return await _chatManager.checkForNewMessages(_chatId!);
   }
 
@@ -133,21 +179,23 @@ class MainScreenState extends State<MainScreen> {
   }
 
   Widget _chatSelectorScreen() {
-    // Use a key that changes each time to force rebuild
-    return ChatSelectionScreen(
-      key: ValueKey('selector_${_selectorRebuildCounter}'),
-      onChatSelected: (chat) {
-        var reload = _chatId != chat.id;
-        setState(() {
-          _chatId = chat.id;
-          _chatName = chat.name;
-          _showSelector = false;
-        });
+    return _loadingSummaries
+        ? const Center(child: CircularProgressIndicator())
+        : ChatSelectionScreen(
+          key: const ValueKey('selector'), // Añadir clave explícita aquí
+          chatSummaries: _chatSummaries,
+          onChatSelected: (chat) {
+            var reload = _chatId != chat.id;
+            setState(() {
+              _chatId = chat.id;
+              _chatName = chat.name;
+              _showSelector = false;
+            });
 
-        // Tras seleccionar, inicializamos el chat
-        if (reload) _initializeChat();
-      },
-    );
+            // Tras seleccionar, inicializamos el chat
+            if (reload) _initializeChat();
+          },
+        );
   }
 
   Widget _loadding() {
@@ -198,8 +246,10 @@ class MainScreenState extends State<MainScreen> {
       onPopInvoked: (didPop) {
         // If we're in chat view and back was pressed
         if (!didPop) {
+          _loadChatSummaries(); // Recargar summaries al volver al selector
           setState(() {
-            _navigatingBackWithGesture = true; // Set flag for back navigation
+            _navigatingBackWithGesture =
+                true; // Renombramos esta variable para mayor claridad
             _showSelector = true;
             _selectorRebuildCounter++; // Increment counter to force rebuild
           });
@@ -214,7 +264,9 @@ class MainScreenState extends State<MainScreen> {
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
           title: Text(
-            _showSelector ? 'DongoChat - $appVersion' : prettify(_chatName ?? 'Unnamed Chat'),
+            _showSelector
+                ? 'Chats - $appVersion'
+                : prettify(_chatName ?? 'Unnamed Chat'),
           ),
           actions: actions,
           flexibleSpace: Container(
@@ -240,6 +292,20 @@ class MainScreenState extends State<MainScreen> {
         ),
         body: Stack(
           children: [
+            // Background image - add this as the first child in the Stack
+            Positioned.fill(
+              child: SizedBox.expand(
+                child: Image.asset(
+                  'assets/ajolote contrast.png',
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  opacity: const AlwaysStoppedAnimation(0.1),
+                  colorBlendMode: BlendMode.multiply,
+                ),
+              ),
+            ),
+
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
               switchInCurve: Curves.easeOut,
@@ -248,12 +314,12 @@ class MainScreenState extends State<MainScreen> {
                 Widget newChild,
                 Animation<double> animation,
               ) {
-                // For the selector coming from back button, use horizontal slide
-                if (newChild.key ==
-                        ValueKey('selector_${_selectorRebuildCounter}') &&
-                    _navigatingBackWithGesture) {
+                // Para el selector que se muestra normalmente (botón de grupo o inicio)
+                if (newChild is ChatSelectionScreen ||
+                    (newChild.key is ValueKey &&
+                        (newChild.key as ValueKey).value == 'selector')) {
                   final offset = Tween<Offset>(
-                    begin: const Offset(-1, 0), // Slide from left to right
+                    begin: const Offset(0, -1), // Deslizar desde arriba
                     end: Offset.zero,
                   ).animate(animation);
 
@@ -261,32 +327,24 @@ class MainScreenState extends State<MainScreen> {
                     child: SlideTransition(position: offset, child: newChild),
                   );
                 }
-                // For the selector from normal navigation, maintain vertical slide
-                else if (newChild.key ==
-                    ValueKey('selector_${_selectorRebuildCounter}')) {
-                  final offset = Tween<Offset>(
-                    begin: const Offset(0, -1),
-                    end: Offset.zero,
-                  ).animate(animation);
-
-                  return ClipRect(
-                    child: SlideTransition(position: offset, child: newChild),
-                  );
-                } else {
-                  // For the chat view, no animation (stays static)
+                // Fallback para otros widgets
+                else {
                   return FadeTransition(opacity: animation, child: newChild);
                 }
               },
               child: body,
             ),
+
             // Botón flotante posicionado para que sobresalga del AppBar
             if (!_showSelector)
               Positioned(
-                top: 10, // Esto lo coloca parcialmente sobre el AppBar
+                top: 10,
                 left: 0,
                 right: 0,
                 child: Center(
                   child: Container(
+                    width: 45, // Ancho fijo para el botón
+                    height: 45, // Alto fijo para mantener forma circular
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
@@ -304,24 +362,35 @@ class MainScreenState extends State<MainScreen> {
                                   .first ??
                               Colors.deepPurple.shade900,
                         ],
-                      ).withOpacity(0.6),
+                      ).withOpacity(0.75),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 2,
-                          offset: const Offset(0, 1),
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                          spreadRadius: 1,
                         ),
                       ],
                     ),
-                    child: IconButton(
-                      icon: const Icon(Icons.group),
-                      color: Colors.white,
-                      splashRadius: 25, // Controla el tamaño del efecto de onda
-                      onPressed:
-                          () => setState(() {
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        splashColor: Colors.white.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(60),
+                        onTap: () {
+                          _loadChatSummaries();
+                          setState(() {
                             _showSelector = true;
-                            _selectorRebuildCounter++; // Increment counter to force rebuild
-                          }),
+                          });
+                        },
+                        child: const Center(
+                          child: Icon(
+                            Icons.group,
+                            size: 30,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -331,4 +400,28 @@ class MainScreenState extends State<MainScreen> {
       ),
     );
   }
+}
+
+// Un clipper personalizado para el efecto de cortina
+class CurtainClipper extends CustomClipper<Path> {
+  final double value;
+
+  CurtainClipper(this.value);
+
+  @override
+  Path getClip(Size size) {
+    // Si la animación ha terminado, mostrar todo el contenido sin recorte
+    if (value >= 0.99) {
+      return Path()..addRect(Rect.fromLTRB(0, 0, size.width, size.height));
+    }
+
+    final path = Path();
+    // La cortina baja, revelando gradualmente el contenido
+    final height = size.height * value;
+    path.addRect(Rect.fromLTRB(0, 0, size.width, height));
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CurtainClipper oldClipper) => value != oldClipper.value;
 }

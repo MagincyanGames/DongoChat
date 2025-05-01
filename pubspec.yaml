@@ -1,7 +1,7 @@
 name: dongo_chat
-description: "A new Flutter project."
+description: "The perfect chat to be Dongo"
 publish_to: 'none'
-version: 0.7.7
+version: 0.7.9
 
 environment:
   sdk: ^3.7.2
@@ -22,12 +22,15 @@ dependencies:
   permission_handler: ^12.0.0
   open_file: ^3.5.10
   package_info_plus: ^8.3.0
+  flutter_launcher_icons: ^0.14.3
+  flutter_svg: ^2.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-
 flutter:
   uses-material-design: true
   assets:
+    - assets/ajolote contrast.png
     - assets/animations/

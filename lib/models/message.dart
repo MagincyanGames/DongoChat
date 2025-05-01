@@ -25,27 +25,27 @@ class MessageData implements Sizeable {
   @override
   int get size {
     int total = 0;
-    
+
     // Base object overhead
     total += 16;
-    
+
     // resend (ObjectId) if not null
     if (resend != null) {
       total += 40; // 12 bytes real + overhead
     }
-    
+
     // url (String) if not null
     if (url != null) {
       total += 8; // pointer
       total += url!.length * 2; // UTF-16 encoding
     }
-    
+
     // type (String) if not null
     if (type != null) {
       total += 8; // pointer
       total += type!.length * 2; // UTF-16 encoding
     }
-    
+
     return total;
   }
 }
@@ -55,8 +55,9 @@ class Message implements Sizeable {
   String message; // Debería contener el texto DESENCRIPTADO
   ObjectId? userId; // Cambiar a non-nullable si es necesario
   ObjectId? sender;
-  String iv; // Cambiar a non-nullable (siempre debe tener IV)
+  String? iv; // Cambiar a non-nullable (siempre debe tener IV)
   DateTime? timestamp;
+  DateTime? updatedAt; // Cambiar a non-nullable si es necesario
   MessageData? data; // Cambiar a non-nullable si es necesario
 
   Message({
@@ -67,6 +68,7 @@ class Message implements Sizeable {
     this.userId, // Hacerlo requerido
     required this.iv, // Hacerlo requerido
     this.data,
+    this.updatedAt,
   });
 
   // Método fromMap CORREGIDO (con desencriptación)
@@ -86,6 +88,20 @@ class Message implements Sizeable {
       }
     }
 
+    final rawUpdatedAt = map['updatedAt'];
+    DateTime? updatedAtDate;
+    if (rawUpdatedAt != null) {
+      try {
+        final milliseconds =
+            rawUpdatedAt is int
+                ? rawUpdatedAt
+                : int.parse(rawUpdatedAt.toString());
+        updatedAtDate = DateTime.fromMillisecondsSinceEpoch(milliseconds);
+      } catch (e) {
+        print("Error al convertir updatedAt: $rawUpdatedAt");
+      }
+    }
+
     return Message(
       id: map['_id'] as ObjectId?,
       message: CryptoUtils.decryptString(
@@ -94,7 +110,9 @@ class Message implements Sizeable {
       ),
       sender: map['sender'] as ObjectId?,
       timestamp: timestampDate,
-      iv: map['iv'] as String, // Asegurar que se carga el IV
+      updatedAt: updatedAtDate,
+
+      iv: null, // Asegurar que se carga el IV
       data:
           map['data'] != null
               ? MessageData.fromMap(map['data'] as Map<String, dynamic>)
@@ -108,6 +126,7 @@ class Message implements Sizeable {
       'message': message, // Asume que ya viene cifrado
       'sender': sender,
       'timestamp': timestamp?.millisecondsSinceEpoch,
+      'updatedAt': updatedAt?.millisecondsSinceEpoch,
       'iv': iv,
       'data': data?.toMap(), // Convertir MessageData a mapa
     };
@@ -140,11 +159,18 @@ class Message implements Sizeable {
     }
 
     // iv (String)
-    total += 8; // puntero
-    total += iv.length * 2; // 2 bytes por carácter
+    if (iv != null) {
+      total += 8; // puntero
+      total += iv!.length * 2; // 2 bytes por carácter
+    }
 
     // timestamp (DateTime) si no es null
     if (timestamp != null) {
+      total += 16; // tamaño estimado de DateTime
+    }
+
+    // updatedAt (DateTime) si no es null
+    if (updatedAt != null) {
       total += 16; // tamaño estimado de DateTime
     }
 

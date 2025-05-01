@@ -7,8 +7,9 @@ class ChatSummary {
   final ObjectId id;
   final String name;
   final Message? latestMessage;
+  final Message? latestUpdated;
 
-  ChatSummary({required this.id, required this.name, this.latestMessage});
+  ChatSummary({required this.id, required this.name, this.latestMessage, this.latestUpdated});
 }
 
 class Chat implements Sizeable {

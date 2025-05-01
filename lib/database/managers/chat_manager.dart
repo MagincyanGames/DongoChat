@@ -25,6 +25,9 @@ class ChatManager extends DatabaseManager<Chat> {
   // Mapa para mantener chats cargados en memoria
   final Map<ObjectId, Chat> _loadedChats = {};
 
+  // Añadir esta propiedad para almacenar el último hash de los summaries
+  String _lastSummariesHash = "";
+
   // Verifica si un chat está cargado
   bool isChatLoaded(String chatName) => _loadedChats.containsKey(chatName);
   
@@ -50,6 +53,7 @@ class ChatManager extends DatabaseManager<Chat> {
       sender: sender,
       data: data,
       timestamp: DateTime.now(),
+      updatedAt: DateTime.now(),
     );
 
     // 3. Guardar en BD
@@ -181,53 +185,6 @@ class ChatManager extends DatabaseManager<Chat> {
             '_id': 1,
             'name': 1,
             'latestMessage': {
-              '\$arrayElemAt': [
-                {'\$sortArray': {
-                  'input': '\$messages',
-                  'sortBy': {'timestamp': -1}
-                }},
-                0
-              ]
-            }
-          }
-        }
-      ];
-      
-      final result = await collection.aggregateToStream(pipeline).toList();
-      
-      if (result.isNotEmpty && result[0].containsKey('latestMessage')) {
-        final rawMessage = result[0]['latestMessage'];
-        
-        // Create and decrypt the message
-        final message = Message.fromMap(rawMessage);
-        
-        // The message will be encrypted, ensure we decrypt it
-        if (message.iv != null && message.iv!.isNotEmpty) {
-          message.message = CryptoUtils.decryptString(message.message,message.iv);
-        }
-        
-        return message;
-      }
-      
-      return null;
-    } catch (e) {
-      print("❌ ERROR in getLatestMessage: $e");
-      return null;
-    }
-  }
-
-  // Get all chat summaries with their latest messages
-  Future<List<ChatSummary>> findAllChatSummaries() async {
-    try {
-      final collection = await getCollectionWithRetry();
-      
-      // Project each chat with just its name and latest message
-      final pipeline = [
-        {
-          '\$project': {
-            '_id': 1,
-            'name': 1,
-            'latestMessage': {
               '\$cond': {
                 'if': {'\$gt': [{'\$size': '\$messages'}, 0]},
                 'then': {
@@ -246,25 +203,153 @@ class ChatManager extends DatabaseManager<Chat> {
         }
       ];
       
-      final results = await collection.aggregateToStream(pipeline).toList();
+      final result = await collection.aggregateToStream(pipeline).toList();
       
-      return results.map((doc) {
-        final name = doc['name'] as String;
-        Message? latestMessage;
+      if (result.isNotEmpty && result[0].containsKey('latestMessage')) {
+        final rawMessage = result[0]['latestMessage'];
         
-        if (doc.containsKey('latestMessage') && doc['latestMessage'] != null) {
-          latestMessage = Message.fromMap(doc['latestMessage']);
+        // Create and decrypt the message
+        final message = Message.fromMap(rawMessage);
+        
+        // The message will be encrypted, ensure we decrypt it
+        if (message.iv != null && message.iv!.isNotEmpty) {
+          message.message = CryptoUtils.decryptString(message.message,message.iv!);
         }
         
-        return ChatSummary(
-          id: doc['_id'] as ObjectId,
-          name: name,
-          latestMessage: latestMessage,
-        );
-      }).toList();
+        return message;
+      }
+      
+      return null;
     } catch (e) {
-      print("❌ ERROR in getAllChatSummaries: $e");
+      print("❌ ERROR in getLatestMessage: $e");
+      return null;
+    }
+  }
+
+  // Get all chat summaries with their latest messages
+  Future<List<ChatSummary>> findAllChatSummaries() async {
+    try {
+      final collection = await getCollectionWithRetry();
+      
+      // Obtener chats con su mensaje más reciente
+      final pipeline = _createChatSummaryPipeline();
+      final results = await collection.aggregateToStream(pipeline).toList();
+      
+      return _processChatSummaryResults(results);
+    } catch (e) {
+      print("❌ ERROR in findAllChatSummaries: $e");
       return [];
     }
+  }
+
+  // Añadir este método para verificar si hay cambios en los chats
+  Future<bool> checkForNewChats(List<ChatSummary> currentSummaries) async {
+    try {
+      // Obtener los summaries actuales de la base de datos
+      final collection = await getCollectionWithRetry();
+      final pipeline = _createChatSummaryPipeline();
+      final results = await collection.aggregateToStream(pipeline).toList();
+      final dbSummaries = _processChatSummaryResults(results);
+      
+      // Calcular un hash simple de los chats actuales
+      final currentHash = _calculateSummariesHash(dbSummaries);
+      
+      // Si el hash ha cambiado, actualizar y retornar true
+      final hasChanged = currentHash != _lastSummariesHash;
+      if (hasChanged) {
+        _lastSummariesHash = currentHash;
+      }
+      
+      return hasChanged;
+    } catch (e) {
+      print("❌ ERROR al verificar nuevos chats: $e");
+      return false; // En caso de error, no forzamos actualización
+    }
+  }
+
+  // Método auxiliar para calcular un "hash" de los summaries
+  String _calculateSummariesHash(List<ChatSummary> summaries) {
+    // Ordenamos por ID para asegurar consistencia
+    summaries.sort((a, b) => a.id.toString().compareTo(b.id.toString()));
+    
+    // Creamos un string único basado en IDs y timestamps de últimos mensajes
+    final buffer = StringBuffer();
+    
+    for (var chat in summaries) {
+      buffer.write(chat.id.toString());
+      buffer.write(':');
+      
+      if (chat.latestMessage != null) {
+        buffer.write(chat.latestMessage!.id.toString());
+        buffer.write('-');
+        buffer.write(chat.latestMessage!.timestamp?.millisecondsSinceEpoch ?? 0);
+      } else {
+        buffer.write('no-message');
+      }
+      
+      buffer.write('|');
+    }
+    
+    return buffer.toString();
+  }
+
+  // Crea el pipeline de agregación para obtener resúmenes de chat
+  List<Map<String, Object>> _createChatSummaryPipeline() {
+    return [
+      {
+        '\$project': {
+          '_id': 1,
+          'name': 1,
+          'latestMessage': {
+            '\$cond': {
+              'if': {'\$gt': [{'\$size': {'\$ifNull': ['\$messages', []]}}, 0]},
+              'then': {
+                '\$arrayElemAt': [
+                  {'\$sortArray': {
+                    'input': '\$messages',
+                    'sortBy': {'timestamp': -1}
+                  }},
+                  0
+                ]
+              },
+              'else': null
+            }
+          }
+        }
+      }
+    ];
+  }
+
+  // Procesa los resultados de la agregación
+  List<ChatSummary> _processChatSummaryResults(List<Map<String, dynamic>> results) {
+    return results.map((doc) {
+      final ObjectId id = doc['_id'];
+      final String name = doc['name'] as String;
+      Message? latestMessage;
+      
+      if (doc.containsKey('latestMessage') && doc['latestMessage'] != null) {
+        final rawMessage = doc['latestMessage'];
+        latestMessage = Message.fromMap(rawMessage);
+        
+        // Descifrar el mensaje si está cifrado
+        if (latestMessage.iv != null && latestMessage.iv!.isNotEmpty) {
+          try {
+            latestMessage.message = CryptoUtils.decryptString(
+              latestMessage.message,
+              latestMessage.iv!
+            );
+          } catch (e) {
+            print("⚠️ Error al descifrar mensaje en chat '$name': $e");
+            // Mantener el mensaje cifrado si hay error
+          }
+        }
+      }
+      
+      return ChatSummary(
+        id: id,
+        name: name,
+        latestMessage: latestMessage,
+      );
+    }).toList();
   }
 }

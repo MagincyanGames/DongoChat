@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
@@ -10,6 +11,7 @@ import 'package:dongo_chat/models/chat.dart';
 import 'package:dongo_chat/models/message.dart';
 import 'package:dongo_chat/models/user.dart';
 import 'package:dongo_chat/screens/chat/widgets/message_bundle.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class ChatView extends StatefulWidget {
   final Chat chat;
@@ -345,6 +347,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
       value: _userCache,
       child: Stack(
         children: [
+          // Existing content
           Column(
             children: [
               Expanded(
@@ -357,7 +360,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                           itemPositionsListener: _itemPositionsListener,
                           itemCount: messages.length,
                           reverse: true,
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           addAutomaticKeepAlives: false,
                           minCacheExtent: 2000,
                           itemBuilder: (context, index) {
@@ -397,12 +400,131 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                           },
                         ),
               ),
+              if (messageData.resend != null) _buildReplyIndicator(),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: _buildMessageInput(),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Focus(
+                        onKeyEvent: (FocusNode node, KeyEvent event) {
+                          if (!Platform.isAndroid && !Platform.isIOS) {
+                            if (event is KeyDownEvent &&
+                                event.logicalKey == LogicalKeyboardKey.enter) {
+                              if (!HardwareKeyboard.instance.isShiftPressed) {
+                                _sendMessage();
+                                return KeyEventResult.handled;
+                              }
+                            }
+                          }
+                          return KeyEventResult.ignored;
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            gradient: LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: [
+                                Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ?? 
+                                    Colors.blue.shade900,
+                                Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ?? 
+                                    Colors.deepPurple.shade900,
+                              ],
+                            ).withOpacity(0.8),
+                          ),
+                          padding: const EdgeInsets.all(2), // Grosor del borde
+                          child: TextFormField(
+                            focusNode: _textFieldFocus,
+                            controller: _controller,
+                            minLines: 1,
+                            maxLines: 5,
+                            keyboardType: TextInputType.multiline,
+                            textCapitalization: TextCapitalization.sentences,
+                            textAlignVertical: TextAlignVertical.center,
+                            expands: false,
+                            style: const TextStyle(height: 1.5),
+                            decoration: InputDecoration(
+                              hintText: messageData.resend != null
+                                  ? 'Responder a mensaje...'
+                                  : 'Escribe un mensaje…',
+                              hintStyle: const TextStyle(height: 1.5),
+                              filled: true,
+                              fillColor: Theme.of(context).scaffoldBackgroundColor,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                borderSide: BorderSide.none, // Quitar borde interno
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                              isDense: true,
+                              alignLabelWithHint: true,
+                              isCollapsed: false,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onLongPress: () {
+                        // Get the position of the button using its key
+                        final RenderBox? buttonBox =
+                            _sendButtonKey.currentContext?.findRenderObject()
+                                as RenderBox?;
+                        if (buttonBox != null) {
+                          // Get the position of the center of the button
+                          final buttonPosition = buttonBox.localToGlobal(
+                            buttonBox.size.center(Offset.zero),
+                          );
+                          _showMessageTypeMenu(context, buttonPosition);
+                        }
+                      },
+                      child: Material(
+                        key: _sendButtonKey, // Add this key to the Material widget
+                        color: Theme.of(context).primaryColor,
+                        borderRadius: BorderRadius.circular(30),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(30),
+                          onTap: _isLoading || widget.isLoading ? null : _sendMessage,
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            child:
+                                _isLoading || widget.isLoading
+                                    ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                    : const Icon(
+                                      Icons.send,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
+          
+          // Scroll button
           Positioned(
             right: 16,
             bottom: 80,
@@ -449,32 +571,58 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                     }
                     return KeyEventResult.ignored;
                   },
-                  child: TextFormField(
-                    focusNode: _textFieldFocus,
-                    controller: _controller,
-                    minLines: 1,
-                    maxLines: 5,
-                    keyboardType: TextInputType.multiline,
-                    textCapitalization: TextCapitalization.sentences,
-                    textAlignVertical: TextAlignVertical.center,
-                    expands: false,
-                    style: const TextStyle(height: 1.5),
-                    decoration: InputDecoration(
-                      hintText:
-                          messageData.resend != null
-                              ? 'Responder a mensaje...'
-                              : 'Escribe un mensaje…',
-                      hintStyle: const TextStyle(height: 1.5),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ?? 
+                              Colors.blue.shade900,
+                          Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ?? 
+                              Colors.deepPurple.shade900,
+                        ],
+                      ).withOpacity(0.6),
+                    ),
+                    padding: const EdgeInsets.all(2), // Grosor del borde
+                    child: TextFormField(
+                      focusNode: _textFieldFocus,
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: 5,
+                      keyboardType: TextInputType.multiline,
+                      textCapitalization: TextCapitalization.sentences,
+                      textAlignVertical: TextAlignVertical.center,
+                      expands: false,
+                      style: const TextStyle(height: 1.5),
+                      decoration: InputDecoration(
+                        hintText: messageData.resend != null
+                            ? 'Responder a mensaje...'
+                            : 'Escribe un mensaje…',
+                        hintStyle: const TextStyle(height: 1.5),
+                        filled: true,
+                        fillColor: Theme.of(context).scaffoldBackgroundColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none, // Quitar borde interno
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                        isDense: true,
+                        alignLabelWithHint: true,
+                        isCollapsed: false,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 16,
-                      ),
-                      isDense: true,
-                      alignLabelWithHint: true,
-                      isCollapsed: false,
                     ),
                   ),
                 ),

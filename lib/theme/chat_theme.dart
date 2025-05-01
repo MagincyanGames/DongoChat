@@ -47,6 +47,8 @@ class ChatTheme extends ThemeExtension<ChatTheme> {
   // Propiedades de conveniencia para compatibilidad con el código existente
   Color get quotedMessageBorderColor => myQuotedMessageBorderColor;
   Color get quotedMessageBackgroundColor => myQuotedMessageBackgroundColor;
+
+  get unreadChatGradientStart => null;
   
   @override
   ThemeExtension<ChatTheme> copyWith({

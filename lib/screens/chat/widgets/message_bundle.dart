@@ -14,6 +14,7 @@ import 'package:dongo_chat/utils/time_ago.dart';
 import 'package:dongo_chat/screens/chat/widgets/message_context_menu.dart';
 import 'dart:io' show Directory, Platform;
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:math' as math;
 
 class MessageBubble extends StatefulWidget {
   final Message msg;
@@ -269,31 +270,45 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
         // Apply the highlight effect only to the message container
         if (widget.isHighlighted)
-          TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeOutBack,
-            builder: (context, value, child) {
-              return Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withOpacity(0.3 * value),
-                      blurRadius: 8 * value,
-                      spreadRadius: 2 * value,
+          Stack(
+            children: [
+              // Mensaje original fijo (sin animación)
+              messageContainer,
+              
+              // Efecto de highlight superpuesto que no afecta la posición
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 1800),
+                curve: Curves.easeInOut,
+                builder: (context, value, child) {
+                  final darkValue = (math.sin(value * 2 * math.pi) * 0.5 + 0.5);
+                  final rawShadowValue = math.sin(value * 2 * math.pi);
+                  final shadowValue = (rawShadowValue.abs() * 0.6) + 0.4;
+                  
+                  return Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16), // Match message container
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.colorScheme.primary.withOpacity(shadowValue * 0.5),
+                            blurRadius: 24 * shadowValue,
+                            spreadRadius: 4 * shadowValue,
+                          ),
+                        ],
+                      ),
+                      // Overlay oscuro para el efecto de oscurecimiento
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          color: Colors.black.withOpacity(0.15 * darkValue),
+                        ),
+                      ),
                     ),
-                  ],
-                ),
-                child: Transform.scale(
-                  scale: 1.0 + (0.05 * value),
-                  child: child,
-                ),
-              );
-            },
-            child: messageContainer,
+                  );
+                },
+              ),
+            ],
           )
         else
           messageContainer,

@@ -9,80 +9,66 @@ class LoadingChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('Loadding chat screen');
-    Future.microtask(onRetry);
-
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-
-    return Stack(
-      children: [
-        Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Usar el color primario del tema para el indicador
-              CircularProgressIndicator(color: theme.colorScheme.primary),
-              const SizedBox(height: 20),
-              // Usar el color de texto del tema
-              Text(
-                'Inicializando chat...',
-                style: TextStyle(
-                  color: theme.textTheme.bodyLarge?.color,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (error != null)
-                Container(
-                  margin: const EdgeInsets.all(10),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color:
-                        isDarkMode
-                            ? Colors.red.shade900.withOpacity(0.7)
-                            : Colors.red.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color:
-                          isDarkMode
-                              ? Colors.red.shade300
-                              : Colors.red.shade300,
-                      width: 1,
-                    ),
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      padding: const EdgeInsets.all(16.0),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (error == null)
+              Column(
+                children: [
+                  const CircularProgressIndicator(
+                    color: Colors.white,
                   ),
-                  child: Text(
-                    'Error: $error',
+                  const SizedBox(height: 16),
+                  Text(
+                    'Cargando chat...',
                     style: TextStyle(
-                      color:
-                          isDarkMode
-                              ? Colors.red.shade100
-                              : Colors.red.shade900,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 18,
+                      color: Colors.white.withOpacity(0.9),
                     ),
+                  ),
+                ],
+              )
+            else
+              Column(
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: Colors.red.shade300,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error al cargar el chat',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    error!,
                     textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white.withOpacity(0.7),
+                    ),
                   ),
-                ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: onRetry,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.primary,
-                  foregroundColor: theme.colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: onRetry,
+                    child: const Text('Reintentar'),
                   ),
-                ),
-                child: const Text(
-                  'Intentar inicializar chat',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+                ],
               ),
-            ],
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
