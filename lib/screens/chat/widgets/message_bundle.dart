@@ -69,19 +69,22 @@ class _MessageBubbleState extends State<MessageBubble> {
       margin: const EdgeInsets.only(left: 8, right: 8, top: 2, bottom: 2),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: isMe
-            ? LinearGradient(
-                colors: theme.extension<ChatTheme>()?.myMessageGradient ??
-                    [Colors.deepPurple, Colors.deepPurple.shade900],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : LinearGradient(
-                colors: theme.extension<ChatTheme>()?.otherMessageGradient ??
-                    [Colors.blue.shade900, Colors.blue.shade700],
-                begin: Alignment.topRight,
-                end: Alignment.bottomLeft,
-              ),
+        gradient:
+            isMe
+                ? LinearGradient(
+                  colors:
+                      theme.extension<ChatTheme>()?.myMessageGradient ??
+                      [Colors.deepPurple, Colors.deepPurple.shade900],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+                : LinearGradient(
+                  colors:
+                      theme.extension<ChatTheme>()?.otherMessageGradient ??
+                      [Colors.blue.shade900, Colors.blue.shade700],
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                ),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -97,7 +100,20 @@ class _MessageBubbleState extends State<MessageBubble> {
             IntrinsicWidth(
               child: GestureDetector(
                 onTap: () async {
-                  if (_isDownloading) return; // Prevent multiple download attempts
+                  if (_isDownloading)
+                    return; // Prevent multiple download attempts
+                  if (!Platform.isAndroid) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Solo para dispositivos android.',
+                        ),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                    return;
+                  }
+                  ;
 
                   setState(() {
                     _isDownloading = true;
@@ -106,43 +122,43 @@ class _MessageBubbleState extends State<MessageBubble> {
 
                   final url = widget.msg.data!.url as String;
 
-                  // 1. Pedir permisos necesarios para descargar/instalar APK
-                  if (Platform.isAndroid) {
-                    // En Android 11+ verificar por ambos permisos
-                    bool permissionGranted = false;
+                  // En Android 11+ verificar por ambos permisos
+                  bool permissionGranted = false;
 
-                    if (await Permission.storage.request().isGranted) {
+                  if (await Permission.storage.request().isGranted) {
+                    permissionGranted = true;
+                  } else {
+                    // Si el primer método falla, intenta con requestInstallPackages
+                    if (await Permission.requestInstallPackages
+                        .request()
+                        .isGranted) {
                       permissionGranted = true;
-                    } else {
-                      // Si el primer método falla, intenta con requestInstallPackages
-                      if (await Permission.requestInstallPackages
-                          .request()
-                          .isGranted) {
-                        permissionGranted = true;
-                      }
-                    }
-
-                    if (!permissionGranted) {
-                      if (widget.onShowSnackbar != null) {
-                        widget.onShowSnackbar!(
-                            'Se requiere permiso de almacenamiento para descargar la APK');
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Permiso de almacenamiento denegado. No se puede descargar la APK.'),
-                            duration: Duration(seconds: 3),
-                          ),
-                        );
-                      }
-                      return;
                     }
                   }
 
+                  if (!permissionGranted) {
+                    if (widget.onShowSnackbar != null) {
+                      widget.onShowSnackbar!(
+                        'Se requiere permiso de almacenamiento para descargar la APK',
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Permiso de almacenamiento denegado. No se puede descargar la APK.',
+                          ),
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    }
+                    return;
+                  }
+
                   // 2. Obtener directorio donde guardar la APK
-                  final Directory dir = Platform.isAndroid
-                      ? (await getExternalStorageDirectory())!
-                      : await getApplicationDocumentsDirectory();
+                  final Directory dir =
+                      Platform.isAndroid
+                          ? (await getExternalStorageDirectory())!
+                          : await getApplicationDocumentsDirectory();
                   final String filePath = '${dir.path}/app_downloaded.apk';
 
                   // 3. Descargar el archivo
@@ -180,20 +196,24 @@ class _MessageBubbleState extends State<MessageBubble> {
                 },
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isMe
-                        ? Theme.of(context).colorScheme.primary.withOpacity(0.3)
-                        : Theme.of(context)
-                            .colorScheme.secondary
-                            .withOpacity(0.3),
+                    color:
+                        isMe
+                            ? Theme.of(
+                              context,
+                            ).colorScheme.primary.withOpacity(0.3)
+                            : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withOpacity(0.3),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 8,
                   ),
-                  child: _isDownloading
-                      ? _buildDownloadProgress(theme)
-                      : _buildApkContent(theme),
+                  child:
+                      _isDownloading
+                          ? _buildDownloadProgress(theme)
+                          : _buildApkContent(theme),
                 ),
               ),
             )
@@ -202,9 +222,10 @@ class _MessageBubbleState extends State<MessageBubble> {
             Text(
               widget.msg.message,
               style: TextStyle(
-                color: isMe
-                    ? theme.colorScheme.onPrimary
-                    : theme.colorScheme.onSecondary,
+                color:
+                    isMe
+                        ? theme.colorScheme.onPrimary
+                        : theme.colorScheme.onSecondary,
               ),
             ),
 
@@ -214,9 +235,10 @@ class _MessageBubbleState extends State<MessageBubble> {
             style: TextStyle(
               fontSize: 10,
               fontStyle: FontStyle.italic,
-              color: isMe
-                  ? theme.colorScheme.onPrimary.withOpacity(0.5)
-                  : theme.colorScheme.onSecondary.withOpacity(0.5),
+              color:
+                  isMe
+                      ? theme.colorScheme.onPrimary.withOpacity(0.5)
+                      : theme.colorScheme.onSecondary.withOpacity(0.5),
             ),
           ),
         ],
@@ -257,10 +279,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withOpacity(0.3 * value),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withOpacity(0.3 * value),
                       blurRadius: 8 * value,
                       spreadRadius: 2 * value,
                     ),
@@ -325,9 +346,10 @@ class _MessageBubbleState extends State<MessageBubble> {
               Text(
                 '${(_downloadProgress * 100).toInt()}%',
                 style: TextStyle(
-                  color: isMe
-                      ? theme.colorScheme.onPrimary
-                      : theme.colorScheme.onSecondary,
+                  color:
+                      isMe
+                          ? theme.colorScheme.onPrimary
+                          : theme.colorScheme.onSecondary,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
@@ -338,9 +360,10 @@ class _MessageBubbleState extends State<MessageBubble> {
           Text(
             'Descargando APK...',
             style: TextStyle(
-              color: isMe
-                  ? theme.colorScheme.onPrimary
-                  : theme.colorScheme.onSecondary,
+              color:
+                  isMe
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.onSecondary,
               fontSize: 12,
             ),
           ),
@@ -357,9 +380,10 @@ class _MessageBubbleState extends State<MessageBubble> {
       children: [
         Icon(
           Icons.android,
-          color: isMe
-              ? theme.colorScheme.onPrimary
-              : theme.colorScheme.onSecondary,
+          color:
+              isMe
+                  ? theme.colorScheme.onPrimary
+                  : theme.colorScheme.onSecondary,
           size: 24,
         ),
         const SizedBox(width: 8),
@@ -370,9 +394,10 @@ class _MessageBubbleState extends State<MessageBubble> {
               Text(
                 widget.msg.message,
                 style: TextStyle(
-                  color: isMe
-                      ? theme.colorScheme.onPrimary
-                      : theme.colorScheme.onSecondary,
+                  color:
+                      isMe
+                          ? theme.colorScheme.onPrimary
+                          : theme.colorScheme.onSecondary,
                 ),
               ),
               Text(
@@ -382,9 +407,10 @@ class _MessageBubbleState extends State<MessageBubble> {
                 style: TextStyle(
                   fontSize: 10,
                   fontStyle: FontStyle.italic,
-                  color: isMe
-                      ? theme.colorScheme.onPrimary.withOpacity(0.7)
-                      : theme.colorScheme.onSecondary.withOpacity(0.7),
+                  color:
+                      isMe
+                          ? theme.colorScheme.onPrimary.withOpacity(0.7)
+                          : theme.colorScheme.onSecondary.withOpacity(0.7),
                 ),
               ),
             ],
@@ -402,13 +428,15 @@ class _MessageBubbleState extends State<MessageBubble> {
         final isMyMessage = originalMessage.sender == widget.me;
 
         // Choose border and background colors based on who is the author
-        final borderColor = isMe
-            ? chatTheme?.myQuotedMessageBorderColor
-            : chatTheme?.otherQuotedMessageBorderColor;
+        final borderColor =
+            isMe
+                ? chatTheme?.myQuotedMessageBorderColor
+                : chatTheme?.otherQuotedMessageBorderColor;
 
-        final backgroundColor = isMyMessage
-            ? chatTheme?.myQuotedMessageBackgroundColor
-            : chatTheme?.otherQuotedMessageBackgroundColor;
+        final backgroundColor =
+            isMyMessage
+                ? chatTheme?.myQuotedMessageBackgroundColor
+                : chatTheme?.otherQuotedMessageBackgroundColor;
 
         return GestureDetector(
           onTap: () {
@@ -418,7 +446,8 @@ class _MessageBubbleState extends State<MessageBubble> {
             margin: const EdgeInsets.only(bottom: 4),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: backgroundColor ??
+              color:
+                  backgroundColor ??
                   theme.colorScheme.surfaceVariant.withOpacity(0.7),
               borderRadius: BorderRadius.circular(12),
               border: Border(
@@ -433,9 +462,9 @@ class _MessageBubbleState extends State<MessageBubble> {
               children: [
                 Text(
                   Provider.of<Map<ObjectId, User>>(
-                            context,
-                            listen: false,
-                          )[originalMessage.sender]?.displayName ??
+                        context,
+                        listen: false,
+                      )[originalMessage.sender]?.displayName ??
                       'Desconocido',
                   style: TextStyle(
                     fontSize: 12,
@@ -450,7 +479,8 @@ class _MessageBubbleState extends State<MessageBubble> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
-                    color: chatTheme?.quotedMessageTextColor ??
+                    color:
+                        chatTheme?.quotedMessageTextColor ??
                         theme.colorScheme.onSurfaceVariant,
                   ),
                 ),

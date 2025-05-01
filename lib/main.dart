@@ -10,16 +10,20 @@ import 'package:dongo_chat/widgets/theme_transition_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 // Definición centralizada de la versión de la app
-const String appVersion = '0.7.6';
+late String appVersion;
 
 final databaseService = DatabaseService();
 final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // await Firebase.initializeApp();
+  
+  // Get version from pubspec.yaml
+  final packageInfo = await PackageInfo.fromPlatform();
+  appVersion = packageInfo.version;
 
   // Registrar el handler para mensajes en background
   // FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
