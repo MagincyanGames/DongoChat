@@ -409,6 +409,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                               onQuotedTap: scrollToMessage,
                               onReply: setReplyMessage,
                               onShowSnackbar: _showSnackbar,
+                              onQuickReply: _quickReply,
                             );
                           },
                         ),
@@ -711,5 +712,11 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
         );
       }
     });
+  }
+
+  _quickReply(ObjectId messageId, String text) {
+    setReplyMessage(messageId);
+    _controller.text = text;
+    _sendMessage();
   }
 }

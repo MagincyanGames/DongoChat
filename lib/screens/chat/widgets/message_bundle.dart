@@ -26,6 +26,7 @@ class MessageBubble extends StatefulWidget {
   final Function(ObjectId) onQuotedTap;
   final Function(ObjectId) onReply;
   final Function(String)? onShowSnackbar;
+  final Function(ObjectId, String)? onQuickReply; // New callback for quick reply
 
   const MessageBubble({
     Key? key,
@@ -38,6 +39,7 @@ class MessageBubble extends StatefulWidget {
     required this.onQuotedTap,
     required this.onReply,
     this.onShowSnackbar,
+    this.onQuickReply,
   }) : super(key: key);
 
   @override
@@ -58,6 +60,7 @@ class _MessageBubbleState extends State<MessageBubble> {
       isMe: isMe,
       onReply: widget.onReply,
       onShowSnackbar: widget.onShowSnackbar,
+      onQuickReply: widget.onQuickReply,
     );
   }
 
@@ -106,9 +109,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                   if (!Platform.isAndroid) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text(
-                          'Solo para dispositivos android.',
-                        ),
+                        content: Text('Solo para dispositivos android.'),
                         duration: Duration(seconds: 1),
                       ),
                     );
@@ -274,7 +275,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             children: [
               // Mensaje original fijo (sin animación)
               messageContainer,
-              
+
               // Efecto de highlight superpuesto que no afecta la posición
               TweenAnimationBuilder<double>(
                 tween: Tween<double>(begin: 0.0, end: 1.0),
@@ -284,14 +285,18 @@ class _MessageBubbleState extends State<MessageBubble> {
                   final darkValue = (math.sin(value * 2 * math.pi) * 0.5 + 0.5);
                   final rawShadowValue = math.sin(value * 2 * math.pi);
                   final shadowValue = (rawShadowValue.abs() * 0.6) + 0.4;
-                  
+
                   return Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16), // Match message container
+                        borderRadius: BorderRadius.circular(
+                          16,
+                        ), // Match message container
                         boxShadow: [
                           BoxShadow(
-                            color: theme.colorScheme.primary.withOpacity(shadowValue * 0.5),
+                            color: theme.colorScheme.primary.withOpacity(
+                              shadowValue * 0.5,
+                            ),
                             blurRadius: 24 * shadowValue,
                             spreadRadius: 4 * shadowValue,
                           ),

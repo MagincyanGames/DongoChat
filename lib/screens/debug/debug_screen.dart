@@ -25,6 +25,7 @@ class _DebugScreenState extends State<DebugScreen> {
   final _databaseNameController = TextEditingController();
   String _selectedProtocol = 'mongodb://';
   bool _isLoading = false;
+  bool _notificationsEnabled = true; // Estado inicial
 
   final String _localConnectionString =
       'mongodb://play.onara.top:27017/DongoChat';
@@ -35,6 +36,7 @@ class _DebugScreenState extends State<DebugScreen> {
   @override
   void initState() {
     super.initState();
+    _loadNotificationSettings(); // Cargar configuración guardada
   }
 
   @override
@@ -45,6 +47,32 @@ class _DebugScreenState extends State<DebugScreen> {
 
     // Leer el estado del servidor seleccionado desde SharedPreferences
     _loadServerSelection();
+  }
+
+  Future<void> _loadNotificationSettings() async {
+    // Asumiendo que tienes un método existente en DatabaseService o puedes agregarlo
+    final enabled = await _databaseService.loadNotificationsEnabled();
+    setState(() {
+      _notificationsEnabled = enabled ?? true; // Predeterminado a habilitado
+    });
+  }
+
+  Future<void> _toggleNotifications(bool value) async {
+    setState(() {
+      _notificationsEnabled = value;
+    });
+
+    await _databaseService.saveNotificationsEnabled(value);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(value
+            ? 'Notificaciones activadas'
+            : 'Notificaciones desactivadas'),
+        backgroundColor: Theme.of(context).colorScheme.secondary,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _loadServerSelection() async {
@@ -416,34 +444,6 @@ class _DebugScreenState extends State<DebugScreen> {
                               )
                               : ElevatedButton(
                                 onPressed: _reconnectToDatabase,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: theme.colorScheme.primary,
-                                  foregroundColor: theme.colorScheme.onPrimary,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Reconectar a la base de datos',
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                              ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Segundo card (configuración del servidor)
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(

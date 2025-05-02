@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:dongo_chat/models/message.dart';
 import 'package:dongo_chat/models/user.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 
@@ -11,18 +11,20 @@ void showMessageContextMenu({
   required bool isMe,
   required Function(ObjectId) onReply,
   Function(ObjectId)? onDelete,
-  Function(String)? onShowSnackbar, // Callback para mostrar Snackbars
+  Function(String)? onShowSnackbar,
+  Function(ObjectId, String)? onQuickReply,
   User? user,
 }) {
-  // Get theme colors
   final theme = Theme.of(context);
   final primaryColor = theme.colorScheme.primary;
+  final secondaryColor = theme.colorScheme.secondary;
   final backgroundColor = theme.cardColor;
   final textColor = theme.textTheme.bodyMedium?.color ?? Colors.black;
-
-  // Calculate the position for the menu
   final RenderBox overlay =
       Overlay.of(context).context.findRenderObject() as RenderBox;
+
+  // 1) Declaro isPressed **fuera** del builder:
+  bool isPressed = false;
 
   showMenu(
     context: context,
@@ -36,12 +38,67 @@ void showMessageContextMenu({
     items: [
       PopupMenuItem(
         value: 'reply',
-        child: Row(
-          children: [
-            Icon(Icons.reply, size: 20, color: primaryColor),
-            const SizedBox(width: 10),
-            Text('Responder', style: TextStyle(color: textColor)),
-          ],
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            return GestureDetector(
+              onLongPressStart: (_) {
+                setState(() => isPressed = true);
+              },
+              onLongPressEnd: (details) {
+                setState(() => isPressed = false);
+                
+                // Verificamos si el puntero está dentro del widget cuando se suelta
+                final RenderBox box = context.findRenderObject() as RenderBox;
+                final Offset localOffset = box.globalToLocal(details.globalPosition);
+                final bool isInsideBounds = box.size.contains(localOffset);
+                
+                Navigator.of(context).pop();
+                
+                // Solo ejecutar la acción si el dedo se suelta dentro del botón
+                if (isInsideBounds) {
+                  if (message.id != null && onQuickReply != null) {
+                    onQuickReply(message.id!, ".");
+                    if (onShowSnackbar != null) {
+                      onShowSnackbar('Respuesta rápida enviada');
+                    }
+                  }
+                } else {
+                  // Acción cancelada
+                  if (onShowSnackbar != null) {
+                    onShowSnackbar('Acción cancelada');
+                  }
+                }
+              },
+              onLongPressMoveUpdate: (details) {
+                // Verificamos si el puntero se ha movido fuera del widget
+                final RenderBox box = context.findRenderObject() as RenderBox;
+                final Offset localOffset = box.globalToLocal(details.globalPosition);
+                final bool isInsideBounds = box.size.contains(localOffset);
+                
+                // Actualizamos el estado visual si cambia
+                if (isInsideBounds != isPressed) {
+                  setState(() => isPressed = isInsideBounds);
+                }
+              },
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.reply,
+                    size: 20,
+                    color: isPressed ? secondaryColor : primaryColor,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    isPressed ? 'Recordar' : 'Responder',
+                    style: TextStyle(
+                      color: isPressed ? secondaryColor : textColor,
+                      fontWeight: isPressed ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
       PopupMenuItem(
@@ -50,51 +107,24 @@ void showMessageContextMenu({
           children: [
             Icon(Icons.copy, size: 20, color: primaryColor),
             const SizedBox(width: 10),
-            Text('Copiar mensaje', style: TextStyle(color: textColor)),
+            Text('Copiar', style: TextStyle(color: textColor)),
           ],
         ),
       ),
-      if (isMe && onDelete != null) // Solo mostrar opción de eliminar para mensajes propios
-        PopupMenuItem(
-          value: 'delete',
-          child: Row(
-            children: [
-              const Icon(Icons.delete, size: 20, color: Colors.red),
-              const SizedBox(width: 10),
-              Text(
-                'Eliminar mensaje',
-                style: const TextStyle(color: Colors.red),
-              ),
-            ],
-          ),
-        ),
     ],
   ).then((value) {
-    // Handle menu item selection
     if (value == null) return;
-
     switch (value) {
       case 'copy':
-        // Copy message to clipboard
-        final messageText = message.message;
-        Clipboard.setData(ClipboardData(text: messageText));
-        
-        // // CAMBIO CRÍTICO: Usar el callback en lugar de ScaffoldMessenger directamente
-        // if (onShowSnackbar != null) {
-        //   onShowSnackbar('Mensaje copiado al portapapeles');
-        // }
-        // break;
-        
-      case 'delete':
-        if (isMe && onDelete != null && message.id != null) {
-          onDelete(message.id!);
-        }
+        Clipboard.setData(ClipboardData(text: message.message));
+        if (onShowSnackbar != null)
+          onShowSnackbar('Mensaje copiado al portapapeles');
         break;
-        
+      case 'delete':
+        if (message.id != null && onDelete != null) onDelete(message.id!);
+        break;
       case 'reply':
-        if (message.id != null) {
-          onReply(message.id!);
-        }
+        if (message.id != null) onReply(message.id!);
         break;
     }
   });
