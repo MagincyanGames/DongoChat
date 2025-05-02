@@ -91,34 +91,14 @@ class ChatSelectionScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final chatTheme = theme.extension<ChatTheme>();
 
-    return Scaffold(
-      backgroundColor: const Color.fromARGB(0, 255, 255, 255),
-      floatingActionButton:
-          onCreateChat != null
-              ? FloatingActionButton(
-                onPressed: () => _showCreateChatDialog(context),
-                backgroundColor:
-                    chatTheme?.myMessageGradient.last ??
-                    theme.colorScheme.primary,
-                child: const Icon(Icons.add),
-              )
-              : null,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity, // Asegura que ocupe toda la altura disponible
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              chatTheme?.otherMessageGradient.last ?? Colors.blue.shade900,
-              chatTheme?.myMessageGradient.first ?? Colors.deepPurple.shade900,
-            ],
-          ).withOpacity(0.6),
-        ),
-        child: chatSummaries.isEmpty
-            ? const Center(child: Text('No hay chats disponibles'))
-            : SingleChildScrollView(
+    return Container(
+      width: double.infinity,
+      height: double.infinity, // Asegura que ocupe toda la altura disponible
+      color: Colors.transparent,
+      child:
+          chatSummaries.isEmpty
+              ? const Center(child: Text('No hay chats disponibles'))
+              : SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Align(
                   alignment: Alignment.topCenter,
@@ -126,124 +106,144 @@ class ChatSelectionScreen extends StatelessWidget {
                     alignment: WrapAlignment.center,
                     spacing: 15, // Espacio horizontal entre elementos
                     runSpacing: 15, // Espacio vertical entre filas
-                    children: chatSummaries.map((chat) {
-                      final name = _prettify(chat.name ?? 'Unnamed');
-                      Future<User?> future;
+                    children:
+                        chatSummaries.map((chat) {
+                          final name = _prettify(chat.name ?? 'Unnamed');
+                          Future<User?> future;
 
-                      if (chat.latestMessage == null) {
-                        future = Future.value(null);
-                      } else if (chat.latestMessage!.sender == null) {
-                        future = Future.value(null);
-                      } else if (chat.latestMessage!.sender != null) {
-                        future = DBManagers.user.findById(
-                          chat.latestMessage!.sender!,
-                        );
-                      } else {
-                        future = Future.value(null);
-                      }
+                          if (chat.latestMessage == null) {
+                            future = Future.value(null);
+                          } else if (chat.latestMessage!.sender == null) {
+                            future = Future.value(null);
+                          } else if (chat.latestMessage!.sender != null) {
+                            future = DBManagers.user.findById(
+                              chat.latestMessage!.sender!,
+                            );
+                          } else {
+                            future = Future.value(null);
+                          }
 
-                      return SizedBox(
-                        width: 150, // Ancho fijo para cada elemento
-                        height: 150 / 1.5, // Mantiene la proporción original
-                        child: FutureBuilder<User?>(
-                          future: future,
-                          builder: (ctx, snapshot) {
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                splashColor:
-                                    chatTheme?.otherQuotedMessageBorderColor
-                                        ?.withOpacity(0.3) ??
-                                    theme.colorScheme.primary.withOpacity(0.3),
-                                onTap: () => onChatSelected(chat),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 20,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        chatTheme
-                                            ?.otherQuotedMessageBackgroundColor ??
-                                        theme.colorScheme.surfaceVariant
-                                            .withOpacity(0.7),
+                          return SizedBox(
+                            width: 150, // Ancho fijo para cada elemento
+                            height:
+                                150 / 1.5, // Mantiene la proporción original
+                            child: FutureBuilder<User?>(
+                              future: future,
+                              builder: (ctx, snapshot) {
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border(
-                                      left: BorderSide(
+                                    splashColor:
+                                        chatTheme?.otherQuotedMessageBorderColor
+                                            ?.withOpacity(0.3) ??
+                                        theme.colorScheme.primary.withOpacity(
+                                          0.3,
+                                        ),
+                                    onTap: () => onChatSelected(chat),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 20,
+                                      ),
+                                      decoration: BoxDecoration(
                                         color:
                                             chatTheme
-                                                ?.otherQuotedMessageBorderColor ??
-                                            theme.colorScheme.primary,
-                                        width: 4,
+                                                ?.otherQuotedMessageBackgroundColor ??
+                                            theme.colorScheme.surfaceVariant
+                                                .withOpacity(0.7),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border(
+                                          left: BorderSide(
+                                            color:
+                                                chatTheme
+                                                    ?.otherQuotedMessageBorderColor ??
+                                                theme.colorScheme.primary,
+                                            width: 4,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            name,
+                                            style: theme.textTheme.bodyLarge
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          if (chat.latestMessage != null &&
+                                              snapshot.data != null) ...[
+                                            const SizedBox(height: 4),
+                                            Expanded(
+                                              child: RichText(
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                text: TextSpan(
+                                                  children: [
+                                                    TextSpan(
+                                                      text:
+                                                          chat
+                                                                      .latestMessage!
+                                                                      .sender !=
+                                                                  null
+                                                              ? "${snapshot.data!.displayName}: "
+                                                              : "",
+                                                      style: theme
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.copyWith(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color:
+                                                                theme
+                                                                    .textTheme
+                                                                    .bodyMedium
+                                                                    ?.color,
+                                                          ),
+                                                    ),
+                                                    TextSpan(
+                                                      text:
+                                                          chat
+                                                              .latestMessage!
+                                                              .message,
+                                                      style: theme
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.copyWith(
+                                                            color: theme
+                                                                .textTheme
+                                                                .bodyMedium
+                                                                ?.color
+                                                                ?.withOpacity(
+                                                                  0.7,
+                                                                ),
+                                                            fontStyle:
+                                                                FontStyle
+                                                                    .italic,
+                                                          ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                     ),
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        name,
-                                        style: theme.textTheme.bodyLarge?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      if (chat.latestMessage != null && snapshot.data != null) ...[
-                                        const SizedBox(height: 4),
-                                        Expanded(
-                                          child: RichText(
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            text: TextSpan(
-                                              children: [
-                                                TextSpan(
-                                                  text:
-                                                      chat.latestMessage!.sender !=
-                                                              null
-                                                          ? "${snapshot.data!.displayName}: "
-                                                          : "",
-                                                  style: theme.textTheme.bodyMedium
-                                                      ?.copyWith(
-                                                        fontWeight: FontWeight.bold,
-                                                        color:
-                                                            theme
-                                                                .textTheme
-                                                                .bodyMedium
-                                                                ?.color,
-                                                      ),
-                                                ),
-                                                TextSpan(
-                                                  text: chat.latestMessage!.message,
-                                                  style: theme.textTheme.bodyMedium
-                                                      ?.copyWith(
-                                                        color: theme
-                                                            .textTheme
-                                                            .bodyMedium
-                                                            ?.color
-                                                            ?.withOpacity(0.7),
-                                                        fontStyle: FontStyle.italic,
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    }).toList(),
+                                );
+                              },
+                            ),
+                          );
+                        }).toList(),
                   ),
                 ),
               ),
-      ),
     );
   }
 }

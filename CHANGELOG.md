@@ -10,7 +10,12 @@
 
 * Added Changelog
 
+### Feat
+
+* **Changelog:** Changelog generator added
+
 ### Fix
 
+* Summary refresh at server change
 * :truck: Application name
 

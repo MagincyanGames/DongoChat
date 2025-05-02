@@ -245,9 +245,28 @@ class MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     Widget? body;
     List<Widget> actions = [];
+
+    final theme = Theme.of(context);
+    final chatTheme = theme.extension<ChatTheme>();
+
     // Si estamos en selector (por defecto true), mostramos la lista
     if (_showSelector) {
-      body = _chatSelectorScreen();
+      body = Container(
+        key: const ValueKey('selector'), // Añadir clave explícita aquí
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              chatTheme?.otherMessageGradient.last ?? Colors.blue.shade900,
+              chatTheme?.myMessageGradient.first ?? Colors.deepPurple.shade900,
+            ],
+          ).withOpacity(0.6),
+        ),
+        child: _chatSelectorScreen(),
+      );
       actions = [
         const ThemeToggleButton(),
         const DebugButton(),
@@ -343,8 +362,8 @@ class MainScreenState extends State<MainScreen> {
                 Animation<double> animation,
               ) {
                 if ((newChild is ChatSelectionScreen ||
-                    (newChild.key is ValueKey &&
-                        (newChild.key as ValueKey).value == 'selector')) && 
+                        (newChild.key is ValueKey &&
+                            (newChild.key as ValueKey).value == 'selector')) &&
                     _navigatingBackWithGesture) {
                   final offset = Tween<Offset>(
                     begin: const Offset(0, -1), // Deslizar desde arriba
@@ -406,14 +425,18 @@ class MainScreenState extends State<MainScreen> {
                         onTap: () {
                           _loadChatSummaries();
                           setState(() {
-                            _navigatingBackWithGesture = true; // Add this line to enable the animation
+                            _navigatingBackWithGesture =
+                                true; // Add this line to enable the animation
                             _showSelector = true;
                             _selectorRebuildCounter++; // Force rebuild
                           });
-                          
+
                           // Reset the flag after animation completes
                           Future.delayed(const Duration(milliseconds: 300), () {
-                            if (mounted) setState(() => _navigatingBackWithGesture = false);
+                            if (mounted)
+                              setState(
+                                () => _navigatingBackWithGesture = false,
+                              );
                           });
                         },
                         child: const Center(
