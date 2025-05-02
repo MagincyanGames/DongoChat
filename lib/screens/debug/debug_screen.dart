@@ -1,5 +1,6 @@
 // debug_screen.dart
 
+import 'package:dongo_chat/screens/chat/widgets/logout_button.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dongo_chat/database/database_service.dart';
@@ -162,6 +163,11 @@ class _DebugScreenState extends State<DebugScreen> {
           duration: const Duration(seconds: 2),
         ),
       );
+
+      if (success) {
+        LogoutButton.logout(context, ask: false); // Cerrar sesión para aplicar cambios
+      }
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
