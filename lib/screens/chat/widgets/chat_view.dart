@@ -221,15 +221,16 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
         messageData,
       );
 
-      setState(() => _loaddingState = 'pushing');
+      setState(() {
+        _loaddingState = 'pushing';
+        messageData = MessageData();
+      });
 
       await FirebaseApi().sendNotification(
         widget.chat.name!,
         text,
         widget.chat.id!,
       );
-
-      setState(() => messageData = MessageData());
 
       // Force a metadata refresh to ensure quotes are cached
       await _prefetchMetadata();
