@@ -1,4 +1,12 @@
 
+<a name="v0.8.3"></a>
+## [v0.8.3](https://github.com/MagincyanGames/DongoChat/compare/v0.8.2...v0.8.3) (2025-05-02)
+
+### Fix
+
+* Notifications crash app
+
+
 <a name="v0.8.2"></a>
 ## [v0.8.2](https://github.com/MagincyanGames/DongoChat/compare/v0.8.1...v0.8.2) (2025-05-02)
 
