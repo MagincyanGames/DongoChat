@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     
     <application
-        android:label="dongo_chat"
+        android:label="Dongo Chat"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity
