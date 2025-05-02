@@ -32,8 +32,6 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  commitlint_cli: ^0.8.1
-  husky: ^0.1.7
   
 flutter:
   uses-material-design: true
