@@ -26,7 +26,8 @@ class MessageBubble extends StatefulWidget {
   final Function(ObjectId) onQuotedTap;
   final Function(ObjectId) onReply;
   final Function(String)? onShowSnackbar;
-  final Function(ObjectId, String)? onQuickReply; // New callback for quick reply
+  final Function(ObjectId, String)?
+  onQuickReply; // New callback for quick reply
 
   const MessageBubble({
     Key? key,
@@ -52,10 +53,36 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   bool get isMe => widget.msg.sender == widget.me;
 
-  void _showContextMenu(BuildContext context, Offset tapPosition) {
+  void _showContextMenu(BuildContext context, TapDownDetails? tapDetails, LongPressStartDetails? longPressDetails) {
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    
+    // Calculate position based on which gesture triggered the menu
+    final Offset position;
+    if (tapDetails != null) {
+      // For right-click/secondary tap
+      position = renderBox.globalToLocal(tapDetails.globalPosition);
+    } else if (longPressDetails != null) {
+      // For long press
+      position = renderBox.globalToLocal(longPressDetails.globalPosition);
+    } else {
+      // Fallback to center of widget
+      position = Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+    }
+    
+    // Calculate menu position relative to the overlay
+    final Offset globalPosition = renderBox.localToGlobal(position);
+    final RelativeRect rect = RelativeRect.fromRect(
+      Rect.fromPoints(
+        globalPosition,
+        globalPosition.translate(40, 40), // Small offset to position menu properly
+      ),
+      Offset.zero & overlay.size,
+    );
+    
     showMessageContextMenu(
       context: context,
-      position: tapPosition,
+      rect: rect, // Pass a RelativeRect instead of raw position
       message: widget.msg,
       isMe: isMe,
       onReply: widget.onReply,
@@ -322,18 +349,11 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     // Wrap with gesture detector and alignment
     return GestureDetector(
-      onSecondaryTapUp: (details) {
-        _showContextMenu(context, details.globalPosition);
+      onSecondaryTapDown: (details) {
+        _showContextMenu(context, details, null);
       },
-      onLongPress: () {
-        final RenderBox renderBox = context.findRenderObject() as RenderBox;
-        final position = renderBox.localToGlobal(Offset.zero);
-        final size = renderBox.size;
-        final tapPosition = Offset(
-          position.dx + size.width / 2,
-          position.dy + size.height / 2,
-        );
-        _showContextMenu(context, tapPosition);
+      onLongPressStart: (details) {
+        _showContextMenu(context, null, details);
       },
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -497,11 +517,12 @@ class _MessageBubbleState extends State<MessageBubble> {
                   originalMessage.message,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: 12,
                     color:
-                        chatTheme?.quotedMessageTextColor ??
-                        theme.colorScheme.onSurfaceVariant,
+                        isMyMessage
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.onSecondary,
                   ),
                 ),
               ],

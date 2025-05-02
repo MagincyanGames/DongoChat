@@ -93,12 +93,12 @@ abstract class DatabaseManager<T extends Sizeable> implements Sizeable {
     return result;
   }
 
-  Future<String> add(T item) async {
+  Future<ObjectId> add(T item) async {
     final collection = await getCollectionWithRetry();
     final result = await collection.insertOne(toMap(item));
 
     if (result.isSuccess) {
-      return result.id.toString();
+      return result.id;
     }
     throw Exception('Error al añadir documento: ${result.writeError?.errmsg}');
   }
@@ -117,9 +117,9 @@ abstract class DatabaseManager<T extends Sizeable> implements Sizeable {
     return result.isSuccess;
   }
 
-  Future<bool> delete(String id) async {
+  Future<bool> delete(ObjectId id) async {
     final collection = await getCollectionWithRetry();
-    final result = await collection.deleteOne(where.id(ObjectId.parse(id)));
+    final result = await collection.deleteOne(where.id(id));
     return result.isSuccess;
   }
 

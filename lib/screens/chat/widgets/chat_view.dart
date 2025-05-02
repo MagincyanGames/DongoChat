@@ -348,7 +348,8 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final messages = widget.chat.messages;
     final user = widget.currentUser;
-
+    final bool hasWritePermission = widget.chat.canWrite(widget.currentUser);
+    print('User: ${user?.id.toString()}, Can write: $hasWritePermission');
     if (!_initialLoadDone) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -414,7 +415,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                           },
                         ),
               ),
-              _buildMessageInput(),
+              _buildMessageInput(hasWritePermission),
             ],
           ),
 
@@ -443,7 +444,41 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildMessageInput() {
+  Widget _buildMessageInput(bool hasWritePermission) {
+    if (!hasWritePermission) {
+      // Return a read-only notice instead of input field when no permission
+      return Container(
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.lock_outline,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'No tienes permiso para escribir en este chat',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Original input field code for users with permission
     return Column(
       children: [
         if (messageData.resend != null) _buildReplyIndicator(),
@@ -543,34 +578,34 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                     _showMessageTypeMenu(context, buttonPosition);
                   }
                 },
-                child: Material(
-                  key: _sendButtonKey, // Add this key to the Material widget
-                  color: Theme.of(context).primaryColor,
-                  borderRadius: BorderRadius.circular(30),
-                  child: InkWell(
+                child: Container(
+                  key: _sendButtonKey,
+                  decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(30),
-                    onTap:
-                        _loaddingState == 'loading' || widget.isLoading
-                            ? null
-                            : _sendMessage,
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      child: _buildMessageTypeButton(_loaddingState),
-
-                      // _loaddingState == 'loading' || widget.isLoading
-                      //     ? const SizedBox(
-                      //       width: 24,
-                      //       height: 24,
-                      //       child: CircularProgressIndicator(
-                      //         color: Colors.white,
-                      //         strokeWidth: 2,
-                      //       ),
-                      //     )
-                      //     : const Icon(
-                      //       Icons.send,
-                      //       color: Colors.white,
-                      //       size: 24,
-                      //     ),
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ?? 
+                            Colors.blue.shade900,
+                        Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ?? 
+                            Colors.deepPurple.shade900,
+                      ],
+                    ).withOpacity(0.6),
+                  ),
+                  padding: const EdgeInsets.all(2), // Border thickness
+                  child: Material(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    borderRadius: BorderRadius.circular(28),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(28),
+                      onTap: _loaddingState == 'loading' || widget.isLoading || !hasWritePermission
+                          ? null
+                          : _sendMessage,
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        child: _buildMessageTypeButton(_loaddingState),
+                      ),
                     ),
                   ),
                 ),

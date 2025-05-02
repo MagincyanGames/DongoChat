@@ -6,14 +6,12 @@ import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 
 void showMessageContextMenu({
   required BuildContext context,
-  required Offset position,
+  required RelativeRect rect, // Changed from Offset position to RelativeRect
   required Message message,
   required bool isMe,
   required Function(ObjectId) onReply,
-  Function(ObjectId)? onDelete,
   Function(String)? onShowSnackbar,
   Function(ObjectId, String)? onQuickReply,
-  User? user,
 }) {
   final theme = Theme.of(context);
   final primaryColor = theme.colorScheme.primary;
@@ -26,15 +24,10 @@ void showMessageContextMenu({
   // 1) Declaro isPressed **fuera** del builder:
   bool isPressed = false;
 
+  // Use the rect directly with showMenu
   showMenu(
     context: context,
-    elevation: 8,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    color: backgroundColor,
-    position: RelativeRect.fromRect(
-      Rect.fromPoints(position, position),
-      Offset.zero & overlay.size,
-    ),
+    position: rect,
     items: [
       PopupMenuItem(
         value: 'reply',
@@ -46,14 +39,16 @@ void showMessageContextMenu({
               },
               onLongPressEnd: (details) {
                 setState(() => isPressed = false);
-                
+
                 // Verificamos si el puntero está dentro del widget cuando se suelta
                 final RenderBox box = context.findRenderObject() as RenderBox;
-                final Offset localOffset = box.globalToLocal(details.globalPosition);
+                final Offset localOffset = box.globalToLocal(
+                  details.globalPosition,
+                );
                 final bool isInsideBounds = box.size.contains(localOffset);
-                
+
                 Navigator.of(context).pop();
-                
+
                 // Solo ejecutar la acción si el dedo se suelta dentro del botón
                 if (isInsideBounds) {
                   if (message.id != null && onQuickReply != null) {
@@ -72,9 +67,11 @@ void showMessageContextMenu({
               onLongPressMoveUpdate: (details) {
                 // Verificamos si el puntero se ha movido fuera del widget
                 final RenderBox box = context.findRenderObject() as RenderBox;
-                final Offset localOffset = box.globalToLocal(details.globalPosition);
+                final Offset localOffset = box.globalToLocal(
+                  details.globalPosition,
+                );
                 final bool isInsideBounds = box.size.contains(localOffset);
-                
+
                 // Actualizamos el estado visual si cambia
                 if (isInsideBounds != isPressed) {
                   setState(() => isPressed = isInsideBounds);
@@ -85,14 +82,15 @@ void showMessageContextMenu({
                   Icon(
                     Icons.reply,
                     size: 20,
-                    color: isPressed ? secondaryColor : primaryColor,
+                    color: isPressed ? primaryColor : null,
                   ),
                   const SizedBox(width: 10),
                   Text(
                     isPressed ? 'Recordar' : 'Responder',
                     style: TextStyle(
-                      color: isPressed ? secondaryColor : textColor,
-                      fontWeight: isPressed ? FontWeight.bold : FontWeight.normal,
+                      color: isPressed ? primaryColor : null,
+                      fontWeight:
+                          isPressed ? FontWeight.bold : FontWeight.normal,
                     ),
                   ),
                 ],
@@ -101,13 +99,14 @@ void showMessageContextMenu({
           },
         ),
       ),
+
       PopupMenuItem(
         value: 'copy',
         child: Row(
-          children: [
-            Icon(Icons.copy, size: 20, color: primaryColor),
-            const SizedBox(width: 10),
-            Text('Copiar', style: TextStyle(color: textColor)),
+          children: const [
+            Icon(Icons.copy),
+            SizedBox(width: 8),
+            Text('Copiar'),
           ],
         ),
       ),
@@ -119,9 +118,6 @@ void showMessageContextMenu({
         Clipboard.setData(ClipboardData(text: message.message));
         if (onShowSnackbar != null)
           onShowSnackbar('Mensaje copiado al portapapeles');
-        break;
-      case 'delete':
-        if (message.id != null && onDelete != null) onDelete(message.id!);
         break;
       case 'reply':
         if (message.id != null) onReply(message.id!);

@@ -223,6 +223,79 @@ class MainScreenState extends State<MainScreen> {
           key: const ValueKey('selector'), // Añadir clave explícita aquí
           chatSummaries: _chatSummaries,
           onChatSelected: selectChat,
+          onCreateChat: (name, privacy) {
+            print("Creating chat with name: $name and privacy: $privacy");
+
+            final user = context.read<UserProvider>().user;
+            final chat = Chat(name: name, privacity: privacy);
+            if (user != null && user.id != null) {
+              chat.adminUsers.add(user.id!);
+            }
+
+            setState(() => _isLoading = true); // Show loading indicator
+
+            DBManagers.chat
+                .add(chat)
+                .then((chatId) {
+                  if (mounted) {
+                    DBManagers.chat.findById(chatId).then((chat) {
+                      setState(() {
+                        _chatId = chatId;
+                        _chatName = name;
+                        _showSelector = false;
+                        _navigatingForwardToChat =
+                            true; // Enable forward animation
+                        _isLoading = false; // Hide loading indicator
+                      });
+
+                      // Initialize the chat immediately
+                      _initializeChat();
+
+                      // Reset the navigation flag after animation completes
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        if (mounted)
+                          setState(() => _navigatingForwardToChat = false);
+                      });
+                    });
+                  }
+                })
+                .catchError((error) {
+                  if (mounted) {
+                    setState(() => _isLoading = false);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Error creating chat: ${error.toString()}',
+                        ),
+                      ),
+                    );
+                  }
+                });
+          },
+          onDeleteChat: (chatId) {
+            setState(() => _isLoading = true); // Show loading indicator
+
+            DBManagers.chat.delete(chatId).then((_) {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false; // Hide loading indicator
+                  _loadChatSummaries(); // Reload summaries after deletion
+                });
+              }
+            }).catchError((error) {
+              if (mounted) {
+                setState(() => _isLoading = false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Error deleting chat: ${error.toString()}',
+                    ),
+                  ),
+                );
+              }
+            });
+            
+          },
         );
   }
 
