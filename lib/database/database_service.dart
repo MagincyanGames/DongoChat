@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:dongo_chat/database/managers/chat_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:synchronized/synchronized.dart';
 
 class DatabaseService {
   late Db db;
@@ -14,6 +15,9 @@ class DatabaseService {
 
   static const String _serverKey =
       'selected_server'; // Key for SharedPreferences
+
+  final Map<String, Db> _connectionPool = {};
+  final _connectionLock = Lock();
 
   String get connectionString => _connectionString;
 
@@ -42,33 +46,42 @@ class DatabaseService {
   }
 
   Future<bool> connectToDatabase([String? customUrl]) async {
-    try {
-      if (customUrl != null && customUrl.isNotEmpty) {
-        _connectionString = customUrl;
-      }
+    return await _connectionLock.synchronized(() async {
+      try {
+        if (customUrl != null && customUrl.isNotEmpty) {
+          _connectionString = customUrl;
+        }
 
-      if (isConnected) {
-        await db.close();
+        if (isConnected) {
+          await db.close();
+          isConnected = false;
+        }
+
+        db = await Db.create(_connectionString);
+        await db.open();
+
+        // Configurar el keep-alive
+        _startKeepAlive();
+
+        // Verificación básica de conexión
+        await db.runCommand({'ping': 1});
+
+        isConnected = true;
+        return true;
+      } catch (e) {
+        print("Error de conexión: $e");
         isConnected = false;
+        _stopKeepAlive();
+        return false;
       }
+    });
+  }
 
-      db = await Db.create(_connectionString);
-      await db.open();
-
-      // Configurar el keep-alive
-      _startKeepAlive();
-
-      // Verificación básica de conexión
-      await db.runCommand({'ping': 1});
-
-      isConnected = true;
-      return true;
-    } catch (e) {
-      print("Error de conexión: $e");
-      isConnected = false;
-      _stopKeepAlive();
-      return false;
+  Future<Db> getConnection() async {
+    if (!isConnected) {
+      await connectToDatabase();
     }
+    return db;
   }
 
   void _startKeepAlive() {
