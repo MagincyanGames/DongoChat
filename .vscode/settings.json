@@ -1,6 +1,7 @@
 {
     "cmake.sourceDirectory": "D:/Projects/dongo_chat/linux",
     "conventionalCommits.scopes": [
-        "AndroidManifest.xml"
+        "AndroidManifest.xml",
+        "Changelog"
     ]
 }
