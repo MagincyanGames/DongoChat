@@ -140,22 +140,20 @@ class FirebaseApi {
 
   // Método para limpiar todas las notificaciones visibles
   Future<void> clearAllNotifications() async {
-    if (!Platform.isAndroid) return;
-    
     try {
-      // Verificar si la recepción está habilitada
-      if (!await canReceiveNotifications()) {
-        print('Limpieza de notificaciones omitida: recepción deshabilitada');
-        return;
-      }
-      
-      // Método correcto para limpiar notificaciones en Android
-      final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = 
+      // Método 1: Usando flutter_local_notifications
+      final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
           FlutterLocalNotificationsPlugin();
-      
-      // Cancelar todas las notificaciones
       await flutterLocalNotificationsPlugin.cancelAll();
-      print('Notificaciones limpiadas correctamente');
+      
+      // Método 2: Usando Firebase directamente (como respaldo)
+      if (Platform.isAndroid) {
+        await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+          alert: false,
+          badge: false,
+          sound: false,
+        );
+      }
     } catch (e) {
       print('Error al limpiar notificaciones: $e');
     }

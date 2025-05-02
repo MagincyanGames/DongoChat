@@ -52,7 +52,7 @@ Future<String> getAccessToken() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Get version from pubspec.yaml
   final packageInfo = await PackageInfo.fromPlatform();
   appVersion = packageInfo.version;
@@ -62,19 +62,25 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    
-    // Inicializar flutter_local_notifications
+
+    await FirebaseApi().initNotifications();
+
+    // Inicializar y solicitar permisos de notificaciones
     final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
         FlutterLocalNotificationsPlugin();
+    // Solicitar permiso de notificaciones explícitamente (Android 13+)
+    flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.requestNotificationsPermission();
+
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const InitializationSettings initializationSettings =
         InitializationSettings(android: initializationSettingsAndroid);
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-    
-    // Limpiar notificaciones
-    final firebaseApi = FirebaseApi();
-    await firebaseApi.clearAllNotifications();
+
+    flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
   // Cargar el servidor seleccionado
@@ -89,7 +95,9 @@ void main() async {
     MultiProvider(
       providers: [
         Provider<DatabaseService>.value(value: databaseService),
-        Provider<FirebaseApi>.value(value: FirebaseApi()),  // Proporcionar FirebaseApi
+        Provider<FirebaseApi>.value(
+          value: FirebaseApi(),
+        ), // Proporcionar FirebaseApi
         ChangeNotifierProvider<UserProvider>(create: (_) => UserProvider()),
         ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
       ],
@@ -113,19 +121,19 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initialUserFuture = _restoreSession();
-    
+
     // Limpiar notificaciones al iniciar
     if (Platform.isAndroid) {
       _firebaseApi.clearAllNotifications();
     }
   }
-  
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
-  
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Cuando la app vuelve a primer plano
