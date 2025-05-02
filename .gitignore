@@ -46,3 +46,7 @@ app.*.map.json
 
 /node_modules
 assets/credentials.json
+..bfg-report/2025-05-02/14-17-13/cache-stats.txt
+..bfg-report/2025-05-02/14-17-13/deleted-files.txt
+..bfg-report/2025-05-02/14-17-13/object-id-map.old-new.txt
+bfg-1.15.0.jar
