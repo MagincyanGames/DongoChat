@@ -1,30 +1,59 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
-import 'package:dongo_chat/database/db_managers.dart';
 import 'package:dongo_chat/main.dart';
-import 'package:dongo_chat/screens/chat/main_screen.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FirebaseApi {
   final _firebaseMessaging = Platform.isAndroid ? FirebaseMessaging.instance : null;
+  StreamSubscription<RemoteMessage>? _onMessageOpenedSubscription;
+  bool _isInitialized = false;
+
+  // Verificar si se pueden ENVIAR notificaciones (todas las plataformas)
+  Future<bool> canSendNotifications() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('notifications_send_enabled') ?? true;
+  }
+
+  // Verificar si se pueden RECIBIR notificaciones (solo Android)
+  Future<bool> canReceiveNotifications() async {
+    if (!Platform.isAndroid) return false;
+    
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('notifications_receive_enabled') ?? true;
+  }
+
   Future<void> initNotifications() async {
+    // Solo inicializar si estamos en Android y las notificaciones están habilitadas
+    if (!Platform.isAndroid || !await canReceiveNotifications()) {
+      print('Recepción de notificaciones deshabilitada o no disponible');
+      return;
+    }
+
     await _firebaseMessaging!.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    final FCMToken = await _firebaseMessaging.getToken();
+    final FCMToken = await _firebaseMessaging!.getToken();
     print('FCM Token: $FCMToken');
 
-    initPushNotifications();
+    await initPushNotifications();
+    _isInitialized = true;
   }
 
   Future<void> handleMessage(RemoteMessage? message) async {
+    // Verificar si la recepción de notificaciones está habilitada
+    if (!await canReceiveNotifications()) {
+      print('Notificación ignorada: recepción deshabilitada por el usuario');
+      return;
+    }
+
     if (message == null) return;
 
     print("FIREBASERESPONSE::" + jsonEncode(message.data));
@@ -32,8 +61,12 @@ class FirebaseApi {
     // Extract chatId from message
     ObjectId? chatId;
     if (message.data.containsKey('chatId')) {
-      chatId = message.data['chatId'] as ObjectId;
-      print("FIREBASERESPONSE:: ChatId received: " + chatId.toHexString());
+      try {
+        chatId = ObjectId.fromHexString(message.data['chatId']);
+        print("FIREBASERESPONSE:: ChatId received: " + chatId.toHexString());
+      } catch (e) {
+        print("Error al convertir chatId: ${e.toString()}");
+      }
     }
 
     // Navigate to main screen with chatId argument
@@ -49,11 +82,18 @@ class FirebaseApi {
     print("FIREBASERESPONSE::Navigation completed");
   }
 
-  Future initPushNotifications() async {
-    FirebaseMessaging.instance.subscribeToTopic('general');
+  Future<void> initPushNotifications() async {
+    // Verificar si la recepción de notificaciones está habilitada
+    if (!Platform.isAndroid || !await canReceiveNotifications()) {
+      print('Configuración de recepción omitida: deshabilitada por el usuario o plataforma no compatible');
+      return;
+    }
+
+    await _firebaseMessaging!.subscribeToTopic('general');
     FirebaseMessaging.instance.getInitialMessage().then(handleMessage);
 
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    // Guardar referencia para cancelar después si es necesario
+    _onMessageOpenedSubscription = FirebaseMessaging.onMessageOpenedApp.listen((message) {
       handleMessage(message);
     });
   }
@@ -63,42 +103,92 @@ class FirebaseApi {
     String body,
     ObjectId chatId,
   ) async {
-    // 1) Obtén un OAuth2 token válido con tu service-account
-    final accessToken = await getAccessToken();
+    // Verificar si el envío de notificaciones está habilitado
+    if (!await canSendNotifications()) {
+      print('Envío de notificación omitido: envío deshabilitado por el usuario');
+      return;
+    }
 
-    // 2) Endpoint v1 (con tu project_id)
+    // El resto del código permanece igual...
+    final accessToken = await getAccessToken();
     final url = Uri.parse(
       'https://fcm.googleapis.com/v1/projects/onara-6d831/messages:send',
     );
-
-    // 3) Headers con Bearer <access_token>
     final headers = {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $accessToken',
     };
-
-    // 4) Payload v1 correcto
     final payload = {
       'message': {
-        'topic': 'general', // sólo el nombre del tema
+        'topic': 'general',
         'notification': {'title': title, 'body': body},
         'data': {'chatId': chatId.toHexString()},
       },
     };
-
-    // 5) Envía la petición
     final response = await http.post(
       url,
       headers: headers,
       body: jsonEncode(payload),
     );
-
-    // 6) Comprueba el resultado
     if (response.statusCode == 200) {
       print('🔔 Notification sent successfully!');
     } else {
       print('⚠️ Failed to send notification: ${response.statusCode}');
       print('📖 Response body: ${response.body}');
+    }
+  }
+
+  // Método para limpiar todas las notificaciones visibles
+  Future<void> clearAllNotifications() async {
+    if (!Platform.isAndroid) return;
+    
+    try {
+      // Verificar si la recepción está habilitada
+      if (!await canReceiveNotifications()) {
+        print('Limpieza de notificaciones omitida: recepción deshabilitada');
+        return;
+      }
+      
+      // Método correcto para limpiar notificaciones en Android
+      final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = 
+          FlutterLocalNotificationsPlugin();
+      
+      // Cancelar todas las notificaciones
+      await flutterLocalNotificationsPlugin.cancelAll();
+      print('Notificaciones limpiadas correctamente');
+    } catch (e) {
+      print('Error al limpiar notificaciones: $e');
+    }
+  }
+  
+  // Habilitar recepción de notificaciones (solo Android)
+  Future<void> enableNotificationsReceive() async {
+    if (!Platform.isAndroid) return;
+    await initNotifications();
+    print('Recepción de notificaciones habilitada');
+  }
+  
+  // Deshabilitar recepción de notificaciones (solo Android)
+  Future<void> disableNotificationsReceive() async {
+    if (!Platform.isAndroid) return;
+    
+    try {
+      // Desinscribirse del topic
+      await _firebaseMessaging?.unsubscribeFromTopic('general');
+      
+      // Borrar el token para dejar de recibir notificaciones
+      await _firebaseMessaging?.deleteToken();
+
+      // Cancelar suscripciones
+      if (_onMessageOpenedSubscription != null) {
+        await _onMessageOpenedSubscription!.cancel();
+        _onMessageOpenedSubscription = null;
+      }
+      
+      _isInitialized = false;
+      print('Recepción de notificaciones deshabilitada');
+    } catch (e) {
+      print('Error al deshabilitar recepción: $e');
     }
   }
 }

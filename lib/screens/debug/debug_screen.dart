@@ -7,6 +7,9 @@ import 'package:dongo_chat/database/database_service.dart';
 import 'package:dongo_chat/database/db_managers.dart';
 import 'package:dongo_chat/providers/UserProvider.dart';
 import 'package:dongo_chat/main.dart' show appVersion;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dongo_chat/api/firebase_api.dart'; // Importación añadida
+import 'dart:io';
 
 const TOTAL_BYTES = 5 * 1024 * 1024; // 5 MB
 const RED_BYTES = 3 * 1024 * 1024; // 1 MB
@@ -21,11 +24,14 @@ class DebugScreen extends StatefulWidget {
 
 class _DebugScreenState extends State<DebugScreen> {
   late DatabaseService _databaseService;
+  late FirebaseApi _firebaseApi; // Añadir esta variable de clase
   final _hostController = TextEditingController();
   final _databaseNameController = TextEditingController();
   String _selectedProtocol = 'mongodb://';
   bool _isLoading = false;
   bool _notificationsEnabled = true; // Estado inicial
+  bool _notificationsSendEnabled = true; // Para enviar notificaciones
+  bool _notificationsReceiveEnabled = true; // Para recibir notificaciones
 
   final String _localConnectionString =
       'mongodb://play.onara.top:27017/DongoChat';
@@ -36,6 +42,7 @@ class _DebugScreenState extends State<DebugScreen> {
   @override
   void initState() {
     super.initState();
+    _firebaseApi = FirebaseApi(); // O inyéctalo via Provider si es necesario
     _loadNotificationSettings(); // Cargar configuración guardada
   }
 
@@ -50,29 +57,104 @@ class _DebugScreenState extends State<DebugScreen> {
   }
 
   Future<void> _loadNotificationSettings() async {
-    // Asumiendo que tienes un método existente en DatabaseService o puedes agregarlo
-    final enabled = await _databaseService.loadNotificationsEnabled();
+    final prefs = await SharedPreferences.getInstance();
+    final sendEnabled = prefs.getBool('notifications_send_enabled') ?? true;
+    final receiveEnabled =
+        prefs.getBool('notifications_receive_enabled') ?? true;
+
     setState(() {
-      _notificationsEnabled = enabled ?? true; // Predeterminado a habilitado
+      _notificationsSendEnabled = sendEnabled;
+      _notificationsReceiveEnabled = receiveEnabled;
     });
   }
 
-  Future<void> _toggleNotifications(bool value) async {
+  Future<void> _toggleNotificationsSend(bool value) async {
     setState(() {
-      _notificationsEnabled = value;
+      _isLoading = true;
+      _notificationsSendEnabled = value;
     });
 
-    await _databaseService.saveNotificationsEnabled(value);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notifications_send_enabled', value);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(value
-            ? 'Notificaciones activadas'
-            : 'Notificaciones desactivadas'),
-        backgroundColor: Theme.of(context).colorScheme.secondary,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            value
+                ? 'Envío de notificaciones activado'
+                : 'Envío de notificaciones desactivado',
+          ),
+          backgroundColor: value ? Colors.green : Colors.grey,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      print('Error al cambiar envío de notificaciones: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al cambiar configuración: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      // Revertir cambio en caso de error
+      setState(() {
+        _notificationsSendEnabled = !value;
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _toggleNotificationsReceive(bool value) async {
+    setState(() {
+      _isLoading = true;
+      _notificationsReceiveEnabled = value;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notifications_receive_enabled', value);
+
+      // Habilitar/deshabilitar el servicio según el valor
+      if (value) {
+        await _firebaseApi.enableNotificationsReceive();
+      } else {
+        await _firebaseApi.disableNotificationsReceive();
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            value
+                ? 'Recepción de notificaciones activada'
+                : 'Recepción de notificaciones desactivada',
+          ),
+          backgroundColor: value ? Colors.green : Colors.grey,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      print('Error al cambiar recepción de notificaciones: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al cambiar configuración: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      // Revertir cambio en caso de error
+      setState(() {
+        _notificationsReceiveEnabled = !value;
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _loadServerSelection() async {
@@ -193,9 +275,11 @@ class _DebugScreenState extends State<DebugScreen> {
       );
 
       if (success) {
-        LogoutButton.logout(context, ask: false); // Cerrar sesión para aplicar cambios
+        LogoutButton.logout(
+          context,
+          ask: false,
+        ); // Cerrar sesión para aplicar cambios
       }
-
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -346,48 +430,123 @@ class _DebugScreenState extends State<DebugScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Uso de almacenamiento en caché',
+                      'Configuración de Notificaciones',
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Consumer<DatabaseService>(
-                      builder: (context, dbService, _) {
-                        final cacheSize =
-                            DBManagers.size; // Cambiado a DBManager.size
-                        final formattedSize = _formatSize(cacheSize);
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Tamaño actual de la caché: $formattedSize',
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                            const SizedBox(height: 8),
-                            LinearProgressIndicator(
-                              value:
-                                  cacheSize > TOTAL_BYTES
-                                      ? 1.0
-                                      : cacheSize / TOTAL_BYTES,
-                              backgroundColor: Colors.grey.withOpacity(0.2),
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                cacheSize > RED_BYTES
-                                    ? Colors.red
-                                    : cacheSize > ORANGE_BYTES
-                                    ? Colors.orange
-                                    : Colors.green,
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Envío de notificaciones',
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
+                              Text(
+                                _notificationsSendEnabled
+                                    ? 'El envío de notificaciones está habilitado'
+                                    : 'El envío de notificaciones está deshabilitado',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color:
+                                      _notificationsSendEnabled
+                                          ? Colors.green
+                                          : theme.colorScheme.outline,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _notificationsSendEnabled,
+                          onChanged: _toggleNotificationsSend,
+                          activeColor: theme.colorScheme.primary,
+                          activeTrackColor: theme.colorScheme.primaryContainer,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Recepción de notificaciones',
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Platform.isAndroid
+                                  ? Text(
+                                    _notificationsReceiveEnabled
+                                        ? 'La recepción de notificaciones está habilitada'
+                                        : 'La recepción de notificaciones está deshabilitada',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color:
+                                          _notificationsReceiveEnabled
+                                              ? Colors.green
+                                              : theme.colorScheme.outline,
+                                    ),
+                                  )
+                                  : Text(
+                                    'Solo disponible en Android',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: theme.colorScheme.error,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                            ],
+                          ),
+                        ),
+                        Platform.isAndroid
+                            ? Switch(
+                              value: _notificationsReceiveEnabled,
+                              onChanged: _toggleNotificationsReceive,
+                              activeColor: theme.colorScheme.primary,
+                              activeTrackColor:
+                                  theme.colorScheme.primaryContainer,
+                            )
+                            : Switch(
+                              value: false,
+                              onChanged: null, // Switch deshabilitado
+                              activeColor: theme.colorScheme.primary
+                                  .withOpacity(0.5),
+                              activeTrackColor: theme
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withOpacity(0.5),
                             ),
-                          ],
-                        );
-                      },
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      Platform.isAndroid
+                          ? 'Cuando están desactivadas, no se enviarán ni recibirán notificaciones push en este dispositivo.'
+                          : 'Las notificaciones push solo están disponibles en dispositivos Android.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.outline,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(
@@ -444,6 +603,33 @@ class _DebugScreenState extends State<DebugScreen> {
                               )
                               : ElevatedButton(
                                 onPressed: _reconnectToDatabase,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: theme.colorScheme.primary,
+                                  foregroundColor: theme.colorScheme.onPrimary,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Reconectar a la base de datos',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                              ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Segundo card (configuración del servidor)
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -606,8 +792,62 @@ class _DebugScreenState extends State<DebugScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            // Primer card (uso de almacenamiento en caché)
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Uso de almacenamiento en caché',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Consumer<DatabaseService>(
+                      builder: (context, dbService, _) {
+                        final cacheSize =
+                            DBManagers.size; // Cambiado a DBManager.size
+                        final formattedSize = _formatSize(cacheSize);
 
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Tamaño actual de la caché: $formattedSize',
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            LinearProgressIndicator(
+                              value:
+                                  cacheSize > TOTAL_BYTES
+                                      ? 1.0
+                                      : cacheSize / TOTAL_BYTES,
+                              backgroundColor: Colors.grey.withOpacity(0.2),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                cacheSize > RED_BYTES
+                                    ? Colors.red
+                                    : cacheSize > ORANGE_BYTES
+                                    ? Colors.orange
+                                    : Colors.green,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
             // Tercer card (gestión de sesión)
+            const SizedBox(height: 16),
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(
@@ -695,34 +935,6 @@ class _DebugScreenState extends State<DebugScreen> {
                       style: theme.textTheme.bodyMedium,
                     ),
                     Text('Modo: Debug', style: theme.textTheme.bodyMedium),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Nuevo card (servidor seleccionado)
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Servidor seleccionado',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _isUsingLocalConnection ? 'Servidor: Local' : 'Servidor: Online',
-                      style: theme.textTheme.bodyMedium,
-                    ),
                   ],
                 ),
               ),
