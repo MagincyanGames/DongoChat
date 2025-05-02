@@ -56,7 +56,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   final Map<ObjectId, Message> _quotedCache = {};
 
   Timer? _refreshTimer;
-  bool _isLoading = false;
+  String _loaddingState = 'none';
   MessageData messageData = MessageData();
 
   ObjectId? _highlightedMessageId;
@@ -212,7 +212,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     if (text.isEmpty) return;
 
     _controller.clear();
-    setState(() => _isLoading = true);
+    setState(() => _loaddingState = 'loading');
 
     try {
       await widget.onSendMessage(
@@ -221,6 +221,8 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
         messageData,
       );
 
+      setState(() => _loaddingState = 'pushing');
+
       await FirebaseApi().sendNotification(
         widget.chat.name!,
         text,
@@ -228,7 +230,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
       );
 
       setState(() => messageData = MessageData());
-      
+
       // Force a metadata refresh to ensure quotes are cached
       await _prefetchMetadata();
 
@@ -239,7 +241,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _loaddingState = 'none');
         _textFieldFocus.requestFocus();
       }
     }
@@ -367,7 +369,10 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                           itemPositionsListener: _itemPositionsListener,
                           itemCount: messages.length,
                           reverse: true,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           addAutomaticKeepAlives: false,
                           minCacheExtent: 2000,
                           itemBuilder: (context, index) {
@@ -410,7 +415,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
               _buildMessageInput(),
             ],
           ),
-          
+
           // Scroll button
           Positioned(
             right: 16,
@@ -465,9 +470,15 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                         colors: [
-                          Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ?? 
+                          Theme.of(context)
+                                  .extension<ChatTheme>()
+                                  ?.otherMessageGradient
+                                  .last ??
                               Colors.blue.shade900,
-                          Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ?? 
+                          Theme.of(context)
+                                  .extension<ChatTheme>()
+                                  ?.myMessageGradient
+                                  .first ??
                               Colors.deepPurple.shade900,
                         ],
                       ).withOpacity(0.6),
@@ -484,9 +495,10 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                       expands: false,
                       style: const TextStyle(height: 1.5),
                       decoration: InputDecoration(
-                        hintText: messageData.resend != null
-                            ? 'Responder a mensaje...'
-                            : 'Escribe un mensaje…',
+                        hintText:
+                            messageData.resend != null
+                                ? 'Responder a mensaje...'
+                                : 'Escribe un mensaje…',
                         hintStyle: const TextStyle(height: 1.5),
                         filled: true,
                         fillColor: Theme.of(context).scaffoldBackgroundColor,
@@ -535,24 +547,28 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                   borderRadius: BorderRadius.circular(30),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(30),
-                    onTap: _isLoading || widget.isLoading ? null : _sendMessage,
+                    onTap:
+                        _loaddingState == 'loading' || widget.isLoading
+                            ? null
+                            : _sendMessage,
                     child: Container(
                       padding: const EdgeInsets.all(10),
-                      child:
-                          _isLoading || widget.isLoading
-                              ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                              : const Icon(
-                                Icons.send,
-                                color: Colors.white,
-                                size: 24,
-                              ),
+                      child: _buildMessageTypeButton(_loaddingState),
+
+                      // _loaddingState == 'loading' || widget.isLoading
+                      //     ? const SizedBox(
+                      //       width: 24,
+                      //       height: 24,
+                      //       child: CircularProgressIndicator(
+                      //         color: Colors.white,
+                      //         strokeWidth: 2,
+                      //       ),
+                      //     )
+                      //     : const Icon(
+                      //       Icons.send,
+                      //       color: Colors.white,
+                      //       size: 24,
+                      //     ),
                     ),
                   ),
                 ),
@@ -562,6 +578,45 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
         ),
       ],
     );
+  }
+
+  Widget _buildMessageTypeButton(String type) {
+    if (type == 'loading' || widget.isLoading) {
+      return const SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+      );
+    }
+    if (type == 'pushing') {
+      return TweenAnimationBuilder<double>(
+        key: const ValueKey('pushing'),
+        tween: Tween<double>(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 800),
+        onEnd: () {
+          if (mounted && _loaddingState == 'pushing') {
+            setState(() {}); // Restart animation while in pushing state
+          }
+        },
+        builder: (context, value, child) {
+          return ShaderMask(
+            shaderCallback: (bounds) {
+              return LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Theme.of(context).colorScheme.secondary,
+                ],
+                transform: GradientRotation(value * 2 * 3.14159),
+              ).createShader(bounds);
+            },
+            blendMode: BlendMode.srcIn,
+            child: const Icon(Icons.campaign, color: Colors.white, size: 24),
+          );
+        },
+      );
+    } else {
+      return Icon(Icons.send, color: Colors.white, size: 24);
+    }
   }
 
   Widget _buildReplyIndicator() {

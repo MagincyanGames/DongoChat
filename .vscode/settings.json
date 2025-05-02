@@ -3,6 +3,7 @@
     "conventionalCommits.scopes": [
         "AndroidManifest.xml",
         "Changelog",
-        "Chat Selector"
+        "Chat Selector",
+        "Messages"
     ]
 }
