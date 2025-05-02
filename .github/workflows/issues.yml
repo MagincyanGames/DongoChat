@@ -15,7 +15,7 @@ jobs:
       !contains(toJson(github.event.issue.labels), 'cancelled') &&
       !contains(toJson(github.event.issue.labels), 'wontfix')
     steps:
-      - uses: actions/add-to-project@v1
+      - uses: actions/add-to-project@v1.0.2
         with:
           project-url: https://github.com/orgs/MagincyanGames/projects/3
           github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
