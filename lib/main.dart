@@ -10,6 +10,7 @@ import 'package:dongo_chat/providers/ThemeProvider.dart';
 import 'package:dongo_chat/providers/UserProvider.dart';
 import 'package:dongo_chat/screens/chat/main_screen.dart';
 import 'package:dongo_chat/screens/login_screen.dart';
+import 'package:dongo_chat/screens/debug/debug_screen.dart';
 import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:dongo_chat/widgets/theme_transition_overlay.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -238,6 +239,7 @@ class _MainAppState extends State<MainApp> {
       routes: {
         '/login': (_) => const LoginScreen(),
         '/main': (_) => const MainScreen(),
+        '/debug': (_) => const DebugScreen(),
       },
       home: FutureBuilder<User?>(
         future: _initialUserFuture,

@@ -72,13 +72,13 @@ class MainScreenState extends State<MainScreen> {
     // Configurar un timer para verificar nuevos chats periódicamente
     Timer.periodic(const Duration(seconds: 10), (_) {
       if (_showSelector && mounted) {
-        _checkForChatUpdates();
+        checkForChatUpdates();
       }
     });
   }
 
   // Método para verificar actualizaciones en los chats
-  Future<void> _checkForChatUpdates() async {
+  Future<void> checkForChatUpdates() async {
     final hasChanges = await _chatManager.checkForNewChats(_chatSummaries);
     if (hasChanges && mounted) {
       // Solo recargamos si hay cambios
