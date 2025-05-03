@@ -1,4 +1,17 @@
 
+<a name="v0.9.1"></a>
+## [v0.9.1](https://github.com/MagincyanGames/DongoChat/compare/v0.9.0...v0.9.1) (2025-05-03)
+
+### Feat
+
+* **Chat Selector:** News Chat
+
+### Fix
+
+* Bigger chats button
+* Corrección de color
+
+
 <a name="v0.9.0"></a>
 ## [v0.9.0](https://github.com/MagincyanGames/DongoChat/compare/v0.8.3...v0.9.0) (2025-05-03)
 
