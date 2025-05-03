@@ -523,7 +523,7 @@ class MainScreenState extends State<MainScreen> {
                             padding: const EdgeInsets.all(8.0),
                             child: Icon(
                               Icons.group,
-                              size: 22,
+                              size: 30,
                               color: Theme.of(context).extension<ChatTheme>()?.actionIconColor ?? Colors.white,
                             ),
                           ),
