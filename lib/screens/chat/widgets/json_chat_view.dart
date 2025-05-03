@@ -186,7 +186,7 @@ class JsonChatViewState extends State<JsonChatView>
         }).toList();
         
         // Ordenar mensajes por fecha (más reciente primero)
-        _messages.sort((a, b) => b.timestamp!.compareTo(a.timestamp!));
+        _messages.sort((a, b) => a.timestamp!.compareTo(b.timestamp!));
         
         // Segunda pasada para actualizar mensajes citados con su contenido real
         for (final msg in _messages) {
