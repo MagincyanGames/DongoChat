@@ -1,9 +1,18 @@
 {
-  "name": "noticias",
-  "messages": [],
-  "readOnlyUsers": [],
-  "readWriteUsers": [],
-  "adminUsers": [
-  ],
-  "privacity": "publicReadOnly"
+    "name": "noticias",
+    "messages": [
+        {
+            "timestamp": {
+                "$numberLong": "1746225001905"
+            },
+            "updatedAt": {
+                "$numberLong": "1746225001905"
+            },
+            "message": "mondongo"
+        }
+    ],
+    "readOnlyUsers": [],
+    "readWriteUsers": [],
+    "adminUsers": [],
+    "privacity": "publicReadOnly"
 }
