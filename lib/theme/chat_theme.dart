@@ -21,18 +21,18 @@ class ChatTheme extends ThemeExtension<ChatTheme> {
   final List<Color> myMessageGradient;
   final List<Color> otherMessageGradient;
   
-  // Para citas de mis mensajes
   final Color myQuotedMessageBorderColor;
   final Color myQuotedMessageBackgroundColor;
   
-  // Para citas de mensajes de otros
   final Color otherQuotedMessageBorderColor;
   final Color otherQuotedMessageBackgroundColor;
   
-  // Comunes para ambos tipos de citas
   final Color quotedMessageTextColor;
   final Color quotedMessageNameColor;
   
+  // Add this new property for action icons
+  final Color actionIconColor;
+
   ChatTheme({
     required this.myMessageGradient,
     required this.otherMessageGradient,
@@ -42,6 +42,8 @@ class ChatTheme extends ThemeExtension<ChatTheme> {
     required this.otherQuotedMessageBackgroundColor,
     required this.quotedMessageTextColor,
     required this.quotedMessageNameColor,
+    // Default to white if not specified
+    this.actionIconColor = Colors.white,
   });
   
   // Propiedades de conveniencia para compatibilidad con el código existente
@@ -60,6 +62,7 @@ class ChatTheme extends ThemeExtension<ChatTheme> {
     Color? otherQuotedMessageBackgroundColor,
     Color? quotedMessageTextColor,
     Color? quotedMessageNameColor,
+    Color? actionIconColor,
   }) {
     return ChatTheme(
       myMessageGradient: myMessageGradient ?? this.myMessageGradient,
@@ -70,6 +73,7 @@ class ChatTheme extends ThemeExtension<ChatTheme> {
       otherQuotedMessageBackgroundColor: otherQuotedMessageBackgroundColor ?? this.otherQuotedMessageBackgroundColor,
       quotedMessageTextColor: quotedMessageTextColor ?? this.quotedMessageTextColor,
       quotedMessageNameColor: quotedMessageNameColor ?? this.quotedMessageNameColor,
+      actionIconColor: actionIconColor ?? this.actionIconColor,
     );
   }
   
@@ -93,6 +97,7 @@ class ChatTheme extends ThemeExtension<ChatTheme> {
       otherQuotedMessageBackgroundColor: Color.lerp(otherQuotedMessageBackgroundColor, other.otherQuotedMessageBackgroundColor, t)!,
       quotedMessageTextColor: Color.lerp(quotedMessageTextColor, other.quotedMessageTextColor, t)!,
       quotedMessageNameColor: Color.lerp(quotedMessageNameColor, other.quotedMessageNameColor, t)!,
+      actionIconColor: Color.lerp(actionIconColor, other.actionIconColor, t)!,
     );
   }
 }

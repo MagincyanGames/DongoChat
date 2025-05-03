@@ -198,6 +198,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         ).copyWith(
           secondary: Colors.deepPurple.shade900,
           onSecondary: Colors.white,
+          surface: Colors.white,
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.deepPurple,
@@ -209,7 +210,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
             // Gradientes de mensaje
             myMessageGradient: [Colors.deepPurple, Colors.deepPurple.shade700],
             otherMessageGradient: [Colors.blue.shade600, Colors.blue.shade900],
-
+            // Add the action icon color for light theme
+            actionIconColor: Colors.grey.shade800,
             // Mis mensajes citados (borde morado)
             myQuotedMessageBorderColor: Colors.purple.shade300,
             myQuotedMessageBackgroundColor: Colors.white,
@@ -252,7 +254,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
               Colors.deepPurple.shade900,
             ],
             otherMessageGradient: [Colors.blue.shade700, Colors.blue.shade900],
-
+            // Add the action icon color for dark theme
+            actionIconColor: Colors.white,
             // Mis mensajes citados (borde morado claro)
             myQuotedMessageBorderColor: Colors.purple.shade300,
             myQuotedMessageBackgroundColor: Colors.black.withAlpha(175),

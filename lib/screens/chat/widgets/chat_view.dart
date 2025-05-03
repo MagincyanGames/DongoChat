@@ -586,9 +586,14 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                       colors: [
-                        Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ?? 
+                        Theme.of(context)
+                                .extension<ChatTheme>()
+                                ?.otherMessageGradient
+                                .last ??
                             Colors.blue.shade900,
-                        Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ?? 
+                        Theme.of(
+                              context,
+                            ).extension<ChatTheme>()?.myMessageGradient.first ??
                             Colors.deepPurple.shade900,
                       ],
                     ).withOpacity(0.6),
@@ -599,9 +604,12 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                     borderRadius: BorderRadius.circular(28),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(28),
-                      onTap: _loaddingState == 'loading' || widget.isLoading || !hasWritePermission
-                          ? null
-                          : _sendMessage,
+                      onTap:
+                          _loaddingState == 'loading' ||
+                                  widget.isLoading ||
+                                  !hasWritePermission
+                              ? null
+                              : _sendMessage,
                       child: Container(
                         padding: const EdgeInsets.all(10),
                         child: _buildMessageTypeButton(_loaddingState),
@@ -647,12 +655,24 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
               ).createShader(bounds);
             },
             blendMode: BlendMode.srcIn,
-            child: const Icon(Icons.campaign, color: Colors.white, size: 24),
+            child: Icon(
+              Icons.campaign,
+              color:
+                  Theme.of(context).extension<ChatTheme>()?.actionIconColor ??
+                  Colors.white,
+              size: 24,
+            ),
           );
         },
       );
     } else {
-      return Icon(Icons.send, color: Colors.white, size: 24);
+      return Icon(
+        Icons.send,
+        color:
+            Theme.of(context).extension<ChatTheme>()?.actionIconColor ??
+            Colors.white,
+        size: 24,
+      );
     }
   }
 

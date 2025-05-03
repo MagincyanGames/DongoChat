@@ -483,62 +483,49 @@ class MainScreenState extends State<MainScreen> {
                 right: 0,
                 child: Center(
                   child: Container(
-                    width: 45, // Ancho fijo para el botón
-                    height: 45, // Alto fijo para mantener forma circular
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                         colors: [
-                          Theme.of(context)
-                                  .extension<ChatTheme>()
-                                  ?.otherMessageGradient
-                                  .last ??
-                              Colors.blue.shade900,
-                          Theme.of(context)
-                                  .extension<ChatTheme>()
-                                  ?.myMessageGradient
-                                  .first ??
-                              Colors.deepPurple.shade900,
+                          Theme.of(context).extension<ChatTheme>()?.otherMessageGradient.last ?? Colors.blue.shade900,
+                          Theme.of(context).extension<ChatTheme>()?.myMessageGradient.first ?? Colors.deepPurple.shade900,
                         ],
-                      ).withOpacity(0.75),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                          spreadRadius: 1,
-                        ),
-                      ],
+                      ),
                     ),
+                    padding: const EdgeInsets.all(2), // Border thickness
                     child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        splashColor: Colors.white.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(60),
-                        onTap: () {
-                          _loadChatSummaries();
-                          setState(() {
-                            _navigatingBackWithGesture =
-                                true; // Add this line to enable the animation
-                            _showSelector = true;
-                            _selectorRebuildCounter++; // Force rebuild
-                          });
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      shape: const CircleBorder(),
+                      elevation: 3,
+                      child: Ink(
+                        decoration: const ShapeDecoration(
+                          shape: CircleBorder(),
+                          color: Colors.transparent,
+                        ),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () {
+                            _loadChatSummaries();
+                            setState(() {
+                              _navigatingBackWithGesture = true;
+                              _showSelector = true;
+                              _selectorRebuildCounter++;
+                            });
 
-                          // Reset the flag after animation completes
-                          Future.delayed(const Duration(milliseconds: 300), () {
-                            if (mounted)
-                              setState(
-                                () => _navigatingBackWithGesture = false,
-                              );
-                          });
-                        },
-                        child: const Center(
-                          child: Icon(
-                            Icons.group,
-                            size: 30,
-                            color: Colors.white,
+                            // Reset the flag after animation completes
+                            Future.delayed(const Duration(milliseconds: 300), () {
+                              if (mounted) setState(() => _navigatingBackWithGesture = false);
+                            });
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Icon(
+                              Icons.group,
+                              size: 22,
+                              color: Theme.of(context).extension<ChatTheme>()?.actionIconColor ?? Colors.white,
+                            ),
                           ),
                         ),
                       ),
