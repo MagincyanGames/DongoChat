@@ -1,4 +1,12 @@
 
+<a name="v0.9.1+1"></a>
+## [v0.9.1+1](https://github.com/MagincyanGames/DongoChat/compare/v0.9.1...v0.9.1+1) (2025-05-03)
+
+### Fix
+
+* News chat order fixed
+
+
 <a name="v0.9.1"></a>
 ## [v0.9.1](https://github.com/MagincyanGames/DongoChat/compare/v0.9.0...v0.9.1) (2025-05-03)
 
