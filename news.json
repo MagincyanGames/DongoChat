@@ -8,7 +8,7 @@
             "updatedAt": {
                 "$numberLong": "1746225001905"
             },
-            "message": "mondongo"
+            "message": "En este canal se mostrarán noticias"
         }
     ],
     "readOnlyUsers": [],
