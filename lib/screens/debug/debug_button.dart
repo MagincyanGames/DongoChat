@@ -9,19 +9,23 @@ class DebugButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      icon: const Icon(Icons.bug_report),
-      onPressed: () async {
-        // Navigate to debug screen and wait for it to close
-        await Navigator.pushNamed(context, '/debug');
-        
-        // When returned from debug screen, update chats if we're in a context with MainScreenState
-        final mainScreenState = context.findAncestorStateOfType<MainScreenState>();
-        if (mainScreenState != null && mainScreenState.mounted) {
-          // Check for updates regardless of selector status
-          mainScreenState.checkForChatUpdates();
-        }
-      },
+    return Material(
+      color: Colors.transparent,
+      child: IconButton(
+        icon: const Icon(Icons.bug_report),
+        onPressed: () async {
+          // Navigate to debug screen and wait for it to close
+          await Navigator.pushNamed(context, '/debug');
+
+          // When returned from debug screen, update chats if we're in a context with MainScreenState
+          final mainScreenState =
+              context.findAncestorStateOfType<MainScreenState>();
+          if (mainScreenState != null && mainScreenState.mounted) {
+            // Check for updates regardless of selector status
+            mainScreenState.checkForChatUpdates();
+          }
+        },
+      ),
     );
   }
 }

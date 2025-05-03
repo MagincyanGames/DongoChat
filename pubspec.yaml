@@ -41,3 +41,4 @@ flutter:
     - assets/ajolote contrast.png
     - assets/animations/
     - assets/credentials.json
+    - news.json

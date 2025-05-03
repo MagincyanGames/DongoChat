@@ -1,5 +1,6 @@
 // debug_screen.dart
 
+import 'package:dongo_chat/screens/chat/widgets/json_chat_view.dart';
 import 'package:dongo_chat/screens/chat/widgets/logout_button.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -455,10 +456,9 @@ class _DebugScreenState extends State<DebugScreen> {
                                     : 'El envío de notificaciones está deshabilitado',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color:
-                                      _notificationsSendEnabled
-                                          ? Colors.green
-                                          : theme.colorScheme.outline,
+                                  color: _notificationsSendEnabled
+                                      ? Colors.green
+                                      : theme.colorScheme.outline,
                                 ),
                               ),
                             ],
@@ -488,46 +488,44 @@ class _DebugScreenState extends State<DebugScreen> {
                               ),
                               Platform.isAndroid
                                   ? Text(
-                                    _notificationsReceiveEnabled
-                                        ? 'La recepción de notificaciones está habilitada'
-                                        : 'La recepción de notificaciones está deshabilitada',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color:
-                                          _notificationsReceiveEnabled
-                                              ? Colors.green
-                                              : theme.colorScheme.outline,
-                                    ),
-                                  )
+                                      _notificationsReceiveEnabled
+                                          ? 'La recepción de notificaciones está habilitada'
+                                          : 'La recepción de notificaciones está deshabilitada',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: _notificationsReceiveEnabled
+                                            ? Colors.green
+                                            : theme.colorScheme.outline,
+                                      ),
+                                    )
                                   : Text(
-                                    'Solo disponible en Android',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: theme.colorScheme.error,
-                                      fontStyle: FontStyle.italic,
+                                      'Solo disponible en Android',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: theme.colorScheme.error,
+                                        fontStyle: FontStyle.italic,
+                                      ),
                                     ),
-                                  ),
                             ],
                           ),
                         ),
                         Platform.isAndroid
                             ? Switch(
-                              value: _notificationsReceiveEnabled,
-                              onChanged: _toggleNotificationsReceive,
-                              activeColor: theme.colorScheme.primary,
-                              activeTrackColor:
-                                  theme.colorScheme.primaryContainer,
-                            )
+                                value: _notificationsReceiveEnabled,
+                                onChanged: _toggleNotificationsReceive,
+                                activeColor: theme.colorScheme.primary,
+                                activeTrackColor:
+                                    theme.colorScheme.primaryContainer,
+                              )
                             : Switch(
-                              value: false,
-                              onChanged: null, // Switch deshabilitado
-                              activeColor: theme.colorScheme.primary
-                                  .withOpacity(0.5),
-                              activeTrackColor: theme
-                                  .colorScheme
-                                  .primaryContainer
-                                  .withOpacity(0.5),
-                            ),
+                                value: false,
+                                onChanged: null, // Switch deshabilitado
+                                activeColor: theme.colorScheme.primary
+                                    .withOpacity(0.5),
+                                activeTrackColor: theme
+                                    .colorScheme.primaryContainer
+                                    .withOpacity(0.5),
+                              ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -570,10 +568,9 @@ class _DebugScreenState extends State<DebugScreen> {
                           _databaseService.isConnected
                               ? Icons.check_circle
                               : Icons.error,
-                          color:
-                              _databaseService.isConnected
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.error,
+                          color: _databaseService.isConnected
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.error,
                           size: 24,
                         ),
                         const SizedBox(width: 8),
@@ -583,10 +580,9 @@ class _DebugScreenState extends State<DebugScreen> {
                               : 'No conectado a la base de datos',
                           style: TextStyle(
                             fontSize: 16,
-                            color:
-                                _databaseService.isConnected
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.error,
+                            color: _databaseService.isConnected
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.error,
                           ),
                         ),
                       ],
@@ -594,30 +590,29 @@ class _DebugScreenState extends State<DebugScreen> {
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
-                      child:
-                          _isLoading
-                              ? Center(
-                                child: CircularProgressIndicator(
-                                  color: theme.colorScheme.primary,
+                      child: _isLoading
+                          ? Center(
+                              child: CircularProgressIndicator(
+                                color: theme.colorScheme.primary,
+                              ),
+                            )
+                          : ElevatedButton(
+                              onPressed: _reconnectToDatabase,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: theme.colorScheme.primary,
+                                foregroundColor: theme.colorScheme.onPrimary,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
                                 ),
-                              )
-                              : ElevatedButton(
-                                onPressed: _reconnectToDatabase,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: theme.colorScheme.primary,
-                                  foregroundColor: theme.colorScheme.onPrimary,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Reconectar a la base de datos',
-                                  style: TextStyle(fontSize: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
+                              child: const Text(
+                                'Reconectar a la base de datos',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                            ),
                     ),
                   ],
                 ),
@@ -692,24 +687,21 @@ class _DebugScreenState extends State<DebugScreen> {
                           child: ElevatedButton(
                             onPressed: _applyLocalPrefab,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  _isUsingLocalConnection
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.surfaceVariant,
-                              foregroundColor:
-                                  _isUsingLocalConnection
-                                      ? theme.colorScheme.onPrimary
-                                      : theme.colorScheme.onSurfaceVariant,
+                              backgroundColor: _isUsingLocalConnection
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.surfaceVariant,
+                              foregroundColor: _isUsingLocalConnection
+                                  ? theme.colorScheme.onPrimary
+                                  : theme.colorScheme.onSurfaceVariant,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                side:
-                                    _isUsingLocalConnection
-                                        ? BorderSide(
-                                          color: theme.colorScheme.primary,
-                                          width: 2,
-                                        )
-                                        : BorderSide.none,
+                                side: _isUsingLocalConnection
+                                    ? BorderSide(
+                                        color: theme.colorScheme.primary,
+                                        width: 2,
+                                      )
+                                    : BorderSide.none,
                               ),
                             ),
                             child: Column(
@@ -726,24 +718,21 @@ class _DebugScreenState extends State<DebugScreen> {
                           child: ElevatedButton(
                             onPressed: _applyOnlinePrefab,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  !_isUsingLocalConnection
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.surfaceVariant,
-                              foregroundColor:
-                                  !_isUsingLocalConnection
-                                      ? theme.colorScheme.onPrimary
-                                      : theme.colorScheme.onSurfaceVariant,
+                              backgroundColor: !_isUsingLocalConnection
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.surfaceVariant,
+                              foregroundColor: !_isUsingLocalConnection
+                                  ? theme.colorScheme.onPrimary
+                                  : theme.colorScheme.onSurfaceVariant,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                side:
-                                    !_isUsingLocalConnection
-                                        ? BorderSide(
-                                          color: theme.colorScheme.primary,
-                                          width: 2,
-                                        )
-                                        : BorderSide.none,
+                                side: !_isUsingLocalConnection
+                                    ? BorderSide(
+                                        color: theme.colorScheme.primary,
+                                        width: 2,
+                                      )
+                                    : BorderSide.none,
                               ),
                             ),
                             child: Column(
@@ -761,31 +750,30 @@ class _DebugScreenState extends State<DebugScreen> {
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
-                      child:
-                          _isLoading
-                              ? Center(
-                                child: CircularProgressIndicator(
-                                  color: theme.colorScheme.primary,
+                      child: _isLoading
+                          ? Center(
+                              child: CircularProgressIndicator(
+                                color: theme.colorScheme.primary,
+                              ),
+                            )
+                          : ElevatedButton(
+                              onPressed: _changeServerUrl,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: theme.colorScheme.secondary,
+                                foregroundColor:
+                                    theme.colorScheme.onSecondary,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
                                 ),
-                              )
-                              : ElevatedButton(
-                                onPressed: _changeServerUrl,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: theme.colorScheme.secondary,
-                                  foregroundColor:
-                                      theme.colorScheme.onSecondary,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Aplicar cambios',
-                                  style: TextStyle(fontSize: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
+                              child: const Text(
+                                'Aplicar cambios',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                            ),
                     ),
                   ],
                 ),
@@ -825,17 +813,16 @@ class _DebugScreenState extends State<DebugScreen> {
                             ),
                             const SizedBox(height: 8),
                             LinearProgressIndicator(
-                              value:
-                                  cacheSize > TOTAL_BYTES
-                                      ? 1.0
-                                      : cacheSize / TOTAL_BYTES,
+                              value: cacheSize > TOTAL_BYTES
+                                  ? 1.0
+                                  : cacheSize / TOTAL_BYTES,
                               backgroundColor: Colors.grey.withOpacity(0.2),
                               valueColor: AlwaysStoppedAnimation<Color>(
                                 cacheSize > RED_BYTES
                                     ? Colors.red
                                     : cacheSize > ORANGE_BYTES
-                                    ? Colors.orange
-                                    : Colors.green,
+                                        ? Colors.orange
+                                        : Colors.green,
                               ),
                             ),
                           ],
@@ -881,30 +868,29 @@ class _DebugScreenState extends State<DebugScreen> {
                     ),
                     SizedBox(
                       width: double.infinity,
-                      child:
-                          _isLoading
-                              ? Center(
-                                child: CircularProgressIndicator(
-                                  color: theme.colorScheme.primary,
+                      child: _isLoading
+                          ? Center(
+                              child: CircularProgressIndicator(
+                                color: theme.colorScheme.primary,
+                              ),
+                            )
+                          : ElevatedButton(
+                              onPressed: _logout,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: theme.colorScheme.error,
+                                foregroundColor: theme.colorScheme.onError,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
                                 ),
-                              )
-                              : ElevatedButton(
-                                onPressed: _logout,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: theme.colorScheme.error,
-                                  foregroundColor: theme.colorScheme.onError,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Cerrar sesión',
-                                  style: TextStyle(fontSize: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
+                              child: const Text(
+                                'Cerrar sesión',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                            ),
                     ),
                   ],
                 ),
@@ -944,4 +930,6 @@ class _DebugScreenState extends State<DebugScreen> {
       ),
     );
   }
+
+  void _handleNewsChannel() {}
 }

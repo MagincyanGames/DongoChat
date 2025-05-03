@@ -9,6 +9,7 @@ import 'package:dongo_chat/models/message.dart';
 import 'package:dongo_chat/models/user.dart';
 import 'package:dongo_chat/providers/UserProvider.dart';
 import 'package:dongo_chat/screens/chat/widgets/chat_view.dart';
+import 'package:dongo_chat/screens/chat/widgets/json_chat_view.dart';
 import 'package:dongo_chat/screens/chat/widgets/loadding_screen.dart';
 import 'package:dongo_chat/screens/chat/widgets/logout_button.dart';
 import 'package:dongo_chat/screens/debug/debug_button.dart';
@@ -275,26 +276,28 @@ class MainScreenState extends State<MainScreen> {
           onDeleteChat: (chatId) {
             setState(() => _isLoading = true); // Show loading indicator
 
-            DBManagers.chat.delete(chatId).then((_) {
-              if (mounted) {
-                setState(() {
-                  _isLoading = false; // Hide loading indicator
-                  _loadChatSummaries(); // Reload summaries after deletion
+            DBManagers.chat
+                .delete(chatId)
+                .then((_) {
+                  if (mounted) {
+                    setState(() {
+                      _isLoading = false; // Hide loading indicator
+                      _loadChatSummaries(); // Reload summaries after deletion
+                    });
+                  }
+                })
+                .catchError((error) {
+                  if (mounted) {
+                    setState(() => _isLoading = false);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Error deleting chat: ${error.toString()}',
+                        ),
+                      ),
+                    );
+                  }
                 });
-              }
-            }).catchError((error) {
-              if (mounted) {
-                setState(() => _isLoading = false);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Error deleting chat: ${error.toString()}',
-                    ),
-                  ),
-                );
-              }
-            });
-            
           },
         );
   }
@@ -340,11 +343,6 @@ class MainScreenState extends State<MainScreen> {
         ),
         child: _chatSelectorScreen(),
       );
-      actions = [
-        const ThemeToggleButton(),
-        const DebugButton(),
-        const LogoutButton(),
-      ];
     }
 
     // pantalla de chat normal
@@ -355,12 +353,36 @@ class MainScreenState extends State<MainScreen> {
 
     if (!_showSelector && _currentChat != null && user != null) {
       body = _chatScreen(user);
-      actions = [
-        const ThemeToggleButton(),
-        const DebugButton(),
-        const LogoutButton(),
-      ];
     }
+
+    actions = [
+      const ThemeToggleButton(),
+
+      Material(
+        color: Colors.transparent,
+        child: IconButton(
+          iconSize: 20,
+          icon: const Icon(Icons.newspaper),
+          tooltip: 'News',
+          onPressed:
+              () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder:
+                      (context) => JsonChatView(
+                        jsonUrl: 'https://raw.githubusercontent.com/MagincyanGames/DongoChat/refs/heads/master/news.json',
+                        currentUser:
+                            Provider.of<UserProvider>(
+                              context,
+                              listen: false,
+                            ).user,
+                      ),
+                ),
+              ),
+        ),
+      ),
+      const DebugButton(),
+    ];
+
     return PopScope(
       canPop: _showSelector, // Only allow app to close when in selector view
       onPopInvoked: (didPop) {

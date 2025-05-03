@@ -23,11 +23,11 @@ class MessageBubble extends StatefulWidget {
   final Message? quoted;
   final bool isConsecutive;
   final bool isHighlighted;
+  final bool centered; // New parameter to control message alignment
   final Function(ObjectId) onQuotedTap;
   final Function(ObjectId) onReply;
   final Function(String)? onShowSnackbar;
-  final Function(ObjectId, String)?
-  onQuickReply; // New callback for quick reply
+  final Function(ObjectId, String)? onQuickReply;
 
   const MessageBubble({
     Key? key,
@@ -37,6 +37,7 @@ class MessageBubble extends StatefulWidget {
     this.quoted,
     this.isConsecutive = false,
     this.isHighlighted = false,
+    this.centered = false, // Default to false to maintain existing behavior
     required this.onQuotedTap,
     required this.onReply,
     this.onShowSnackbar,
@@ -277,7 +278,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     // Create the full message widget with username if needed
     final messageContent = Column(
       crossAxisAlignment:
-          isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          widget.centered ? CrossAxisAlignment.center : (isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start),
       children: [
         if (!widget.isConsecutive && widget.user != null)
           Container(
@@ -356,7 +357,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         _showContextMenu(context, null, details);
       },
       child: Align(
-        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        alignment: widget.centered ? Alignment.center : (isMe ? Alignment.centerRight : Alignment.centerLeft),
         child: messageContent,
       ),
     );

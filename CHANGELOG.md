@@ -1,4 +1,16 @@
 
+<a name="v0.9.0"></a>
+## [v0.9.0](https://github.com/MagincyanGames/DongoChat/compare/v0.8.3...v0.9.0) (2025-05-03)
+
+### Feat
+
+* **Messages:** Simple Permission System
+
+### Fix
+
+* :bug: Database delete
+
+
 <a name="v0.8.3"></a>
 ## [v0.8.3](https://github.com/MagincyanGames/DongoChat/compare/v0.8.2...v0.8.3) (2025-05-02)
 
