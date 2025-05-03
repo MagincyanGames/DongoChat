@@ -3,40 +3,40 @@
     "messages": [
         {
             "timestamp": {
-                "$numberLong": "1746292448"
+                "$numberLong": "1746291099277"
             },
             "updatedAt": {
-                "$numberLong": "1746292448"
+                "$numberLong": "1746291099277"
             },
             "message": "En este canal se mostrarán noticias"
         },
         {
             "timestamp": {
-                "$numberLong": "1746292458"
+                "$numberLong": "1746291099278"
             },
             "updatedAt": {
-                "$numberLong": "1746292458"
+                "$numberLong": "1746291099278"
             },
             "message": "Nueva versión 0.9.1"
         },
         {
             "timestamp": {
-                "$numberLong": "1746292458"
+                "$numberLong": "1746291099279"
             },
             "updatedAt": {
-                "$numberLong": "1746292458"
+                "$numberLong": "1746291099279"
             },
             "message": "· Chat de noticias"
         },
         {
             "timestamp": {
-                "$numberLong": "1746292468"
+                "$numberLong": "1746291099280"
             },
             "updatedAt": {
-                "$numberLong": "1746292468"
+                "$numberLong": "1746291099280"
             },
             "message": "· Modificación en los estilos de los botones"
-        },
+        }
     ],
     "readOnlyUsers": [],
     "readWriteUsers": [],
