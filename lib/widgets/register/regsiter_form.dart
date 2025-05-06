@@ -74,58 +74,49 @@ class _RegisterFormState extends State<RegisterForm> {
     }
 
     setState(() => _isLoading = true);
-    final dbService = Provider.of<DatabaseService>(context, listen: false);
-    final userMgr = DBManagers.user;
-    final userProv = Provider.of<UserProvider>(context, listen: false);
-
+    
     try {
-      final exists = await userMgr.usernameExists(_usernameController.text);
-      if (exists) {
+      // Get the UserProvider
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      
+      // Hash the password (using your existing method)
+      final hashedPassword = _hashPassword(_passwordController.text);
+      
+      // Use the register method from UserProvider
+      final success = await userProvider.register(
+        displayName: _displayNameController.text,
+        username: _usernameController.text,
+        password: hashedPassword,
+        color: 0xFF2196F3, // Default blue color
+      );
+      
+      if (success) {
+        // Registration successful, navigate to main screen
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/main',
+          (_) => false,
+        );
+      } else {
+        // Registration failed for some reason
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Usuario ya en uso'),
+            content: Text('Error al registrar usuario'),
             duration: Duration(seconds: 3),
           ),
         );
-        return;
       }
-
-      // Hash de la contraseña
-      final hashedPassword = _hashPassword(_passwordController.text);
-
-      final newUser = User(
-        displayName: _displayNameController.text,
-        username: _usernameController.text,
-        color: 0xFF2196F3,
-        password: hashedPassword,
-      );
-
-      await userMgr.add(newUser);
-      final u = await userMgr.findByUsername(newUser.username);
-      newUser.id = u?.id; // Asignar el ID del nuevo usuario
-
-      if(Platform.isAndroid) {
-        // Android: obtener el token de FCM
-        var tkn = await FirebaseMessaging.instance.getToken();
-        newUser.fcmToken = tkn;
-        await userMgr.update(newUser.id!, newUser);
+    } catch (e) {
+      // Handle specific error cases
+      String errorMessage = 'Error al registrar: $e';
+      
+      // Check for common errors
+      if (e.toString().contains('409') || e.toString().contains('already exists')) {
+        errorMessage = 'El nombre de usuario ya está en uso';
       }
       
-      userProv.user = newUser; // asigna currentUser
-
-      // Guardar credenciales para restaurar sesión
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('username', _usernameController.text);
-      await prefs.setString('password', hashedPassword);
-
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainScreen()),
-        (_) => false,
-      );
-    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error al registrar: $e'),
+          content: Text(errorMessage),
           duration: Duration(seconds: 3),
         ),
       );

@@ -8,10 +8,13 @@ import 'package:dongo_chat/firebase_options.dart';
 import 'package:dongo_chat/models/user.dart';
 import 'package:dongo_chat/providers/ThemeProvider.dart';
 import 'package:dongo_chat/providers/UserProvider.dart';
+import 'package:dongo_chat/providers/chat_cache_provider.dart';
+import 'package:dongo_chat/routes/main_routes.dart';
 import 'package:dongo_chat/screens/chat/main_screen.dart';
 import 'package:dongo_chat/screens/login_screen.dart';
 import 'package:dongo_chat/screens/debug/debug_screen.dart';
 import 'package:dongo_chat/theme/chat_theme.dart';
+import 'package:dongo_chat/theme/main_theme.dart';
 import 'package:dongo_chat/widgets/theme_transition_overlay.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -28,7 +31,6 @@ late String appVersion;
 
 final databaseService = DatabaseService();
 final navigatorKey = GlobalKey<NavigatorState>();
-final GlobalKey<MainScreenState> mainScreenKey = GlobalKey<MainScreenState>();
 
 Future<String> getAccessToken() async {
   // Cargar el archivo JSON desde los assets
@@ -82,24 +84,17 @@ void main() async {
 
     flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
-
-  // Cargar el servidor seleccionado
-  final isConnected = await databaseService.connectToPreferences();
-  print(
-    isConnected
-        ? 'Conexión a la base de datos exitosa'
-        : 'Error al conectar a la base de datos',
-  );
-
+  
   runApp(
     MultiProvider(
       providers: [
-        Provider<DatabaseService>.value(value: databaseService),
+        ChangeNotifierProvider<DatabaseService>(create: (_) => DatabaseService()),
         Provider<FirebaseApi>.value(
           value: FirebaseApi(),
         ), // Proporcionar FirebaseApi
         ChangeNotifierProvider<UserProvider>(create: (_) => UserProvider()),
         ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => ChatCacheProvider()),
       ],
       child: const MainApp(),
     ),
@@ -145,39 +140,11 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
 
   Future<User?> _restoreSession() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final username = prefs.getString('username');
-      final pwdHash = prefs.getString('password');
-
-      if (username != null && pwdHash != null) {
-        final userMgr = DBManagers.user;
-        // Agregamos un timeout para evitar que se bloquee indefinidamente
-        final ok = await userMgr
-            .authenticateUser(username, pwdHash)
-            .timeout(const Duration(seconds: 5), onTimeout: () => false);
-
-        if (ok) {
-          final doc = await userMgr
-              .findByUsername(username)
-              .timeout(const Duration(seconds: 5), onTimeout: () => null);
-
-          if (doc != null) {
-            doc.password = pwdHash;
-            context.read<UserProvider>().user = doc;
-
-            if (Platform.isAndroid) {
-              var tkn = await FirebaseMessaging.instance.getToken();
-              if (tkn != null && doc.fcmToken != doc.fcmToken) {
-                // Actualiza el token en la base de datos
-                await DBManagers.user.update(doc.id!, doc);
-              }
-            }
-
-            return doc;
-          }
-        }
-      }
-      return null;
+      final userProvider = context.read<UserProvider>();
+      final success = await userProvider.restoreSession()
+          .timeout(const Duration(seconds: 5), onTimeout: () => false);
+      
+      return success ? userProvider.user : null;
     } catch (e) {
       print('Error al restaurar sesión: $e');
       return null;
@@ -190,93 +157,11 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
 
     return MaterialApp(
       title: 'DongoChat',
-      theme: ThemeData(
-        useMaterial3: false,
-        primarySwatch: Colors.deepPurple,
-        colorScheme: ColorScheme.fromSwatch(
-          primarySwatch: Colors.deepPurple,
-        ).copyWith(
-          secondary: Colors.deepPurple.shade900,
-          onSecondary: Colors.white,
-          surface: Colors.white,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.deepPurple,
-          foregroundColor: Colors.white,
-        ),
-        iconTheme: const IconThemeData(color: Colors.white),
-        extensions: [
-          ChatTheme(
-            // Gradientes de mensaje
-            myMessageGradient: [Colors.deepPurple, Colors.deepPurple.shade700],
-            otherMessageGradient: [Colors.blue.shade600, Colors.blue.shade900],
-            // Add the action icon color for light theme
-            actionIconColor: Colors.grey.shade800,
-            // Mis mensajes citados (borde morado)
-            myQuotedMessageBorderColor: Colors.purple.shade300,
-            myQuotedMessageBackgroundColor: Colors.white,
-
-            // Mensajes de otros citados (borde azul)
-            otherQuotedMessageBorderColor: Colors.deepPurple.shade200,
-            otherQuotedMessageBackgroundColor: Colors.white.withAlpha(200),
-
-            // Colores de texto comunes
-            quotedMessageTextColor: Colors.grey.shade800,
-            quotedMessageNameColor: Colors.deepPurple.shade700,
-          ),
-        ],
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: false,
-        brightness: Brightness.dark,
-        primarySwatch: Colors.deepPurple,
-        colorScheme: ColorScheme.fromSwatch(
-          primarySwatch: Colors.deepPurple,
-          brightness: Brightness.dark,
-        ).copyWith(
-          secondary: Colors.blue.shade800,
-          onSecondary: const Color.fromARGB(255, 255, 255, 255),
-          background: Color.fromARGB(255, 0, 0, 0),
-          surface: Colors.grey[850],
-        ),
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.grey[900],
-          foregroundColor: Colors.white,
-        ),
-        iconTheme: const IconThemeData(color: Colors.white),
-        cardColor: Colors.grey[850],
-        canvasColor: const Color.fromARGB(255, 27, 25, 34),
-        extensions: [
-          ChatTheme(
-            // Gradientes de mensaje
-            myMessageGradient: [
-              Colors.deepPurple.shade600,
-              Colors.deepPurple.shade900,
-            ],
-            otherMessageGradient: [Colors.blue.shade700, Colors.blue.shade900],
-            // Add the action icon color for dark theme
-            actionIconColor: Colors.white,
-            // Mis mensajes citados (borde morado claro)
-            myQuotedMessageBorderColor: Colors.purple.shade300,
-            myQuotedMessageBackgroundColor: Colors.black.withAlpha(175),
-
-            // Mensajes de otros citados (borde azul)
-            otherQuotedMessageBorderColor: Colors.blue.shade200,
-            otherQuotedMessageBackgroundColor: Colors.black.withAlpha(100),
-
-            // Colores de texto comunes
-            quotedMessageTextColor: Colors.grey.shade300,
-            quotedMessageNameColor: Colors.deepPurple.shade300,
-          ),
-        ],
-      ),
+      theme: MainTheme(),
+      darkTheme: MainDarkTheme(),
       themeMode: themeProvider.themeMode,
       navigatorKey: navigatorKey,
-      routes: {
-        '/login': (_) => const LoginScreen(),
-        '/main': (_) => const MainScreen(),
-        '/debug': (_) => const DebugScreen(),
-      },
+      routes: MainRoutes,
       home: FutureBuilder<User?>(
         future: _initialUserFuture,
         builder: (context, snap) {
@@ -335,9 +220,23 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
               ),
             );
           }
+          
+          if (snap.data != null) {
+            print('Restaurando sesión...');
+            // Deferred navigation using post-frame callback
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              navigatorKey.currentState?.pushReplacementNamed('/main');
+            });
+          } else {
+            print('No hay sesión activa, redirigiendo a login...');
+            // Deferred navigation using post-frame callback
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              navigatorKey.currentState?.pushReplacementNamed('/login');
+            });
+          }
 
           // Conexión exitosa
-          return snap.data != null ? const MainScreen() : const LoginScreen();
+          return Scaffold(body: Center(child: CircularProgressIndicator()));
         },
       ),
       builder: (context, child) {

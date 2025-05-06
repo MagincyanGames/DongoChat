@@ -30,8 +30,20 @@ class ChatTheme extends ThemeExtension<ChatTheme> {
   final Color quotedMessageTextColor;
   final Color quotedMessageNameColor;
   
-  // Add this new property for action icons
+  // Action icon color
   final Color actionIconColor;
+  
+  // Dialog theme properties
+  final Color? dialogBackgroundColor;
+  final BorderRadius? dialogBorderRadius;
+  final Color? dialogPrimaryButtonColor;
+  final Color? dialogSecondaryButtonColor;
+  final TextStyle? dialogTitleStyle;
+  final TextStyle? dialogContentStyle;
+  final Color? dialogFieldBackgroundColor;
+  final InputDecorationTheme? dialogInputDecorationTheme;
+  final Color? dialogRadioActiveColor;
+  final Color? dialogCheckboxActiveColor;
 
   ChatTheme({
     required this.myMessageGradient,
@@ -42,11 +54,21 @@ class ChatTheme extends ThemeExtension<ChatTheme> {
     required this.otherQuotedMessageBackgroundColor,
     required this.quotedMessageTextColor,
     required this.quotedMessageNameColor,
-    // Default to white if not specified
     this.actionIconColor = Colors.white,
+    // Dialog theme properties with default values of null
+    this.dialogBackgroundColor,
+    this.dialogBorderRadius,
+    this.dialogPrimaryButtonColor,
+    this.dialogSecondaryButtonColor,
+    this.dialogTitleStyle,
+    this.dialogContentStyle,
+    this.dialogFieldBackgroundColor,
+    this.dialogInputDecorationTheme,
+    this.dialogRadioActiveColor,
+    this.dialogCheckboxActiveColor,
   });
   
-  // Propiedades de conveniencia para compatibilidad con el código existente
+  // Convenience properties for backward compatibility
   Color get quotedMessageBorderColor => myQuotedMessageBorderColor;
   Color get quotedMessageBackgroundColor => myQuotedMessageBackgroundColor;
 
@@ -63,6 +85,17 @@ class ChatTheme extends ThemeExtension<ChatTheme> {
     Color? quotedMessageTextColor,
     Color? quotedMessageNameColor,
     Color? actionIconColor,
+    // Dialog theme properties
+    Color? dialogBackgroundColor,
+    BorderRadius? dialogBorderRadius,
+    Color? dialogPrimaryButtonColor,
+    Color? dialogSecondaryButtonColor,
+    TextStyle? dialogTitleStyle,
+    TextStyle? dialogContentStyle,
+    Color? dialogFieldBackgroundColor,
+    InputDecorationTheme? dialogInputDecorationTheme,
+    Color? dialogRadioActiveColor,
+    Color? dialogCheckboxActiveColor,
   }) {
     return ChatTheme(
       myMessageGradient: myMessageGradient ?? this.myMessageGradient,
@@ -74,6 +107,17 @@ class ChatTheme extends ThemeExtension<ChatTheme> {
       quotedMessageTextColor: quotedMessageTextColor ?? this.quotedMessageTextColor,
       quotedMessageNameColor: quotedMessageNameColor ?? this.quotedMessageNameColor,
       actionIconColor: actionIconColor ?? this.actionIconColor,
+      // Dialog theme properties
+      dialogBackgroundColor: dialogBackgroundColor ?? this.dialogBackgroundColor,
+      dialogBorderRadius: dialogBorderRadius ?? this.dialogBorderRadius,
+      dialogPrimaryButtonColor: dialogPrimaryButtonColor ?? this.dialogPrimaryButtonColor,
+      dialogSecondaryButtonColor: dialogSecondaryButtonColor ?? this.dialogSecondaryButtonColor,
+      dialogTitleStyle: dialogTitleStyle ?? this.dialogTitleStyle,
+      dialogContentStyle: dialogContentStyle ?? this.dialogContentStyle,
+      dialogFieldBackgroundColor: dialogFieldBackgroundColor ?? this.dialogFieldBackgroundColor,
+      dialogInputDecorationTheme: dialogInputDecorationTheme ?? this.dialogInputDecorationTheme,
+      dialogRadioActiveColor: dialogRadioActiveColor ?? this.dialogRadioActiveColor,
+      dialogCheckboxActiveColor: dialogCheckboxActiveColor ?? this.dialogCheckboxActiveColor,
     );
   }
   
@@ -98,6 +142,17 @@ class ChatTheme extends ThemeExtension<ChatTheme> {
       quotedMessageTextColor: Color.lerp(quotedMessageTextColor, other.quotedMessageTextColor, t)!,
       quotedMessageNameColor: Color.lerp(quotedMessageNameColor, other.quotedMessageNameColor, t)!,
       actionIconColor: Color.lerp(actionIconColor, other.actionIconColor, t)!,
+      // Dialog theme properties lerp
+      dialogBackgroundColor: Color.lerp(dialogBackgroundColor, other.dialogBackgroundColor, t),
+      dialogBorderRadius: BorderRadius.lerp(dialogBorderRadius, other.dialogBorderRadius, t),
+      dialogPrimaryButtonColor: Color.lerp(dialogPrimaryButtonColor, other.dialogPrimaryButtonColor, t),
+      dialogSecondaryButtonColor: Color.lerp(dialogSecondaryButtonColor, other.dialogSecondaryButtonColor, t),
+      dialogTitleStyle: TextStyle.lerp(dialogTitleStyle, other.dialogTitleStyle, t),
+      dialogContentStyle: TextStyle.lerp(dialogContentStyle, other.dialogContentStyle, t),
+      dialogFieldBackgroundColor: Color.lerp(dialogFieldBackgroundColor, other.dialogFieldBackgroundColor, t),
+      dialogInputDecorationTheme: other.dialogInputDecorationTheme,  // Can't lerp InputDecorationTheme easily
+      dialogRadioActiveColor: Color.lerp(dialogRadioActiveColor, other.dialogRadioActiveColor, t),
+      dialogCheckboxActiveColor: Color.lerp(dialogCheckboxActiveColor, other.dialogCheckboxActiveColor, t),
     );
   }
 }

@@ -36,49 +36,30 @@ class _LoginFormState extends State<LoginForm> {
     super.dispose();
   }
 
-  // Método para cifrar la contraseña
-
   void _attemptLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
-    // Obtén los providers con listen: false
-    final userMgr = DBManagers.user;
-    final userProv = Provider.of<UserProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
 
     try {
-      final hashed = CryptoUtils.makeHash(_passwordController.text);
-      final ok = await userMgr.authenticateUser(
+      // Hash the password using the same utility method
+      final hashedPassword = CryptoUtilities.makeHash(_passwordController.text);
+      
+      // Use the UserProvider's login method instead of the direct database call
+      final success = await userProvider.login(
         _usernameController.text,
-        hashed,
+        hashedPassword,
       );
 
-      if (ok) {
-        // Carga el usuario completo
-        final doc = await userMgr.findByUsername(_usernameController.text);
-        if (doc != null) {
-          doc.password =
-              hashed; // Asegúrate de que la contraseña cifrada se guarde
-          userProv.user = doc;
-
-          // Guardar credenciales para restaurar sesión
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('username', _usernameController.text);
-          await prefs.setString('password', hashed);
-
-          if (Platform.isAndroid) {
-            var tkn = await FirebaseMessaging.instance.getToken();
-            doc.fcmToken = tkn;
-            await userMgr.update(doc.id!, doc);
-          }
-        }
-
-        // Navega a MainScreen y limpia la pila
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const MainScreen()),
+      if (success) {
+        // Login successful, navigate to main screen
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/main',
           (_) => false,
         );
       } else {
+        // Login failed
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Credenciales incorrectas'),
@@ -87,6 +68,7 @@ class _LoginFormState extends State<LoginForm> {
         );
       }
     } catch (e) {
+      // Handle any errors
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error al iniciar sesión: $e'),

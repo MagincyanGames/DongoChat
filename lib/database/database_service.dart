@@ -1,120 +1,173 @@
 import 'dart:async';
+import 'dart:convert';
 
-import 'package:mongo_dart/mongo_dart.dart';
-import 'package:dongo_chat/database/managers/chat_manager.dart';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:dongo_chat/database/managers/api_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:synchronized/synchronized.dart';
 
-class DatabaseService {
-  late Db db;
-  bool isConnected = false;
-  String _connectionString =
-      'mongodb+srv://onara:AduLHQ6icblTnfCV@onaradb.5vdzp.mongodb.net/?retryWrites=true&w=majority&appName=onaradb/DongoChat';
-  // String _connectionString = 'mongodb://play.onara.top:27017/WeLearning';
-  Timer? _keepAliveTimer;
-
-  static const String _serverKey =
-      'selected_server'; // Key for SharedPreferences
-
-  final Map<String, Db> _connectionPool = {};
-  final _connectionLock = Lock();
-
+class DatabaseService extends ChangeNotifier {
+  // Authentication token for API requests
+  String? auth;
+  
+  // Connection state
+  bool _isConnected = false;
+  bool get isConnected => _isConnected;
+  
+  // Lock for synchronized operations
+  final _lock = Lock();
+  
+  // Server URLs
+  final String _localServerUrl = 'http://192.168.0.71:10000/api';
+  final String _onlineServerUrl = 'https://dongoserver.onrender.com/api';
+  
+  // Current connection string
+  String _connectionString = '';
   String get connectionString => _connectionString;
-
-  Future<void> saveSelectedServer(bool isUsingLocal) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_serverKey, isUsingLocal);
+  
+  // Initialize the service
+  Future<void> initialize() async {
+    // Load the preferred server from SharedPreferences
+    await loadSelectedServer();
+    
+    // Try to connect to the server
+    await connectToDatabase();
   }
-
+  
+  // Load selected server preference from SharedPreferences
   Future<bool> loadSelectedServer() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_serverKey) ?? true; // Default to local server
-  }
-
-  Future<bool> connectToPreferences() async {
     try {
-      // Tu código actual para conectar a la base de datos
-      return await connectToDatabase(
-        await loadSelectedServer()
-            ? 'mongodb://play.onara.top:27017/DongoChat'
-            : 'mongodb+srv://onara:AduLHQ6icblTnfCV@onaradb.5vdzp.mongodb.net/?retryWrites=true&w=majority&appName=onaradb/DongoChat',
-      ).timeout(const Duration(seconds: 5), onTimeout: () => false);
+      final prefs = await SharedPreferences.getInstance();
+      final isLocal = prefs.getBool('use_local_server') ?? false;
+      
+      // Set the connection string based on the saved preference
+      _connectionString = isLocal ? _localServerUrl : _onlineServerUrl;
+      
+      // Update ApiManager base URL
+      ApiManager.setBaseUrl(_connectionString);
+      
+      return isLocal;
     } catch (e) {
-      print('Error en connectToPreferences: $e');
+      print('Error loading server selection: $e');
+      // Default to local server if an error occurs
+      _connectionString = _localServerUrl;
+      ApiManager.setBaseUrl(_connectionString);
+      return true;
+    }
+  }
+  
+  // Save server selection to SharedPreferences
+  Future<bool> saveSelectedServer(bool useLocalServer) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('use_local_server', useLocalServer);
+      
+      // Set the connection string based on the new preference
+      _connectionString = useLocalServer ? _localServerUrl : _onlineServerUrl;
+      
+      // Update ApiManager base URL
+      ApiManager.setBaseUrl(_connectionString);
+      
+      return true;
+    } catch (e) {
+      print('Error saving server selection: $e');
       return false;
     }
   }
-
-  Future<bool> connectToDatabase([String? customUrl]) async {
-    return await _connectionLock.synchronized(() async {
+  
+  // Change server URL
+  Future<bool> changeServerUrl(String newUrl) async {
+    return await _lock.synchronized(() async {
       try {
-        if (customUrl != null && customUrl.isNotEmpty) {
-          _connectionString = customUrl;
+        _connectionString = newUrl;
+        
+        // Update ApiManager base URL
+        ApiManager.setBaseUrl(_connectionString);
+        
+        // Test connection to the new server
+        final connected = await connectToDatabase();
+        
+        if (connected) {
+          // If connection is successful, save the preference
+          bool isLocal = newUrl == _localServerUrl;
+          await saveSelectedServer(isLocal);
+          return true;
+        } else {
+          return false;
         }
-
-        if (isConnected) {
-          await db.close();
-          isConnected = false;
-        }
-
-        db = await Db.create(_connectionString);
-        await db.open();
-
-        // Configurar el keep-alive
-        _startKeepAlive();
-
-        // Verificación básica de conexión
-        await db.runCommand({'ping': 1});
-
-        isConnected = true;
-        return true;
       } catch (e) {
-        print("Error de conexión: $e");
-        isConnected = false;
-        _stopKeepAlive();
+        print('Error changing server URL: $e');
         return false;
       }
     });
   }
-
-  Future<Db> getConnection() async {
-    if (!isConnected) {
-      await connectToDatabase();
-    }
-    return db;
-  }
-
-  void _startKeepAlive() {
-    _stopKeepAlive(); // Detener cualquier timer existente
-
-    // Enviar un ping cada 5 minutos para mantener la conexión activa
-    _keepAliveTimer = Timer.periodic(const Duration(minutes: 5), (_) async {
+  
+  // Check connection to the database
+  Future<bool> connectToDatabase() async {
+    return await _lock.synchronized(() async {
       try {
-        if (isConnected) {
-          await db.runCommand({'ping': 1});
-          print('Keep-alive ping enviado');
-        }
+        // Attempt to ping the server
+        final response = await http.get(
+          Uri.parse('$_connectionString/ping'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 5));
+        
+        _isConnected = response.statusCode == 200;
+        
+        // Notify listeners of connection state change
+        notifyListeners();
+        
+        return _isConnected;
       } catch (e) {
-        print('Error en keep-alive: $e');
-        isConnected = false;
+        print('Error connecting to server: $e');
+        _isConnected = false;
+        notifyListeners();
+        return false;
       }
     });
   }
-
-  void _stopKeepAlive() {
-    _keepAliveTimer?.cancel();
-    _keepAliveTimer = null;
-  }
-
-  Future<bool> changeServerUrl(String newUrl) async {
-    return await connectToDatabase(newUrl);
-  }
-
-  Future<void> closeConnection() async {
-    _stopKeepAlive();
-    if (isConnected) {
-      await db.close();
-      isConnected = false;
+  
+  // Load authentication token from SharedPreferences
+  Future<String?> loadAuthToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      auth = prefs.getString('user_token');
+      return auth;
+    } catch (e) {
+      print('Error loading auth token: $e');
+      return null;
     }
+  }
+  
+  // Save authentication token to SharedPreferences
+  Future<bool> saveAuthToken(String token) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_token', token);
+      auth = token;
+      return true;
+    } catch (e) {
+      print('Error saving auth token: $e');
+      return false;
+    }
+  }
+  
+  // Clear authentication token from SharedPreferences
+  Future<bool> clearAuthToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('user_token');
+      auth = null;
+      return true;
+    } catch (e) {
+      print('Error clearing auth token: $e');
+      return false;
+    }
+  }
+  
+  // Create an authenticated HTTP client
+  http.Client createClient() {
+    return http.Client();
   }
 }

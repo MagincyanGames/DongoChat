@@ -42,7 +42,7 @@ packages:
     source: hosted
     version: "2.12.0"
   basic_utils:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: basic_utils
       sha256: "2064b21d3c41ed7654bc82cc476fd65542e04d60059b74d5eed490a4da08fc6c"
@@ -689,7 +689,7 @@ packages:
     source: hosted
     version: "2.1.8"
   pointycastle:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: pointycastle
       sha256: "4be0097fcf3fd3e8449e53730c631200ebc7b88016acecab2b0da2f0149222fe"

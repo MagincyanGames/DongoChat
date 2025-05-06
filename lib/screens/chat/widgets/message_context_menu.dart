@@ -113,11 +113,10 @@ void showMessageContextMenu({
     ],
   ).then((value) {
     if (value == null) return;
+    // Mover lógica de estado fuera del builder
     switch (value) {
       case 'copy':
         Clipboard.setData(ClipboardData(text: message.message));
-        if (onShowSnackbar != null)
-          onShowSnackbar('Mensaje copiado al portapapeles');
         break;
       case 'reply':
         if (message.id != null) onReply(message.id!);

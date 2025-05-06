@@ -18,6 +18,20 @@ class User implements Sizeable {
     this.fcmToken,
   });
 
+  /// Create a User from a map structure (e.g., from JSON)
+  factory User.fromMap(Map<String, dynamic> map) {
+    return User(
+      id: map['_id'] is ObjectId 
+          ? map['_id'] 
+          : (map['_id'] != null ? ObjectId.fromHexString(map['_id'].toString()) : null),
+      displayName: map['displayName'] ?? '',
+      username: map['username'] ?? '',
+      color: map['color'] ?? 0xFF000000, // Default to black if no color specified
+      password: map['password'],
+      fcmToken: map['fcmToken'],
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

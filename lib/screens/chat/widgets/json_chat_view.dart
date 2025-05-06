@@ -161,7 +161,6 @@ class JsonChatViewState extends State<JsonChatView>
               message: "Mensaje citado", // Esto se actualizará después
               sender: senderId,
               timestamp: timestamp,
-              iv: "",
             );
           }
           
@@ -180,7 +179,6 @@ class JsonChatViewState extends State<JsonChatView>
             message: msg['message'] as String,
             sender: senderId,
             timestamp: timestamp,
-            iv: msg['iv'] as String? ?? "",
             data: data,
           );
         }).toList();
@@ -199,7 +197,6 @@ class JsonChatViewState extends State<JsonChatView>
                 message: "Mensaje no encontrado",
                 sender: null,
                 timestamp: DateTime.now(),
-                iv: "",
               ),
             );
             
@@ -209,7 +206,6 @@ class JsonChatViewState extends State<JsonChatView>
                 message: originalMsg.message,
                 sender: originalMsg.sender,
                 timestamp: originalMsg.timestamp,
-                iv: originalMsg.iv,
               );
             }
           }
@@ -244,7 +240,6 @@ class JsonChatViewState extends State<JsonChatView>
             message: "No se pudieron cargar las noticias: $e",
             sender: null,
             timestamp: DateTime.now(),
-            iv: "",
           ),
         ],
         readOnlyUsers: widget.currentUser != null ? [widget.currentUser!.id!] : [],

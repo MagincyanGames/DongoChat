@@ -1,389 +1,312 @@
-import 'package:dongo_chat/models/user.dart';
-import 'package:dongo_chat/providers/UserProvider.dart';
-import 'package:flutter/material.dart';
-import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
-import 'package:provider/provider.dart';
-import 'package:dongo_chat/models/chat.dart';
+import 'dart:async'; // Add timer import
+import 'dart:convert';
+
+import 'package:bson/src/classes/object_id.dart';
 import 'package:dongo_chat/database/db_managers.dart';
+import 'package:dongo_chat/main.dart';
+import 'package:dongo_chat/models/chat.dart';
+import 'package:dongo_chat/providers/UserProvider.dart';
+import 'package:dongo_chat/screens/chat/widgets/chat_selection.dart';
 import 'package:dongo_chat/theme/chat_theme.dart';
+import 'package:dongo_chat/widgets/app_bar.dart';
+import 'package:dongo_chat/widgets/buttons/appbar/debug_button.dart';
+import 'package:dongo_chat/widgets/buttons/appbar/theme_toggle_button.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-class ChatSelectionScreen extends StatelessWidget {
-  final List<ChatSummary> chatSummaries;
-  final ValueChanged<ChatSummary> onChatSelected;
-  final Function(String, String)? onCreateChat;
-  final Function(ObjectId)? onDeleteChat; // Add delete callback
+// Polling interval in seconds - can be adjusted as needed
+const int POLLING_INTERVAL_SECONDS = 5;
 
-  const ChatSelectionScreen({
-    Key? key,
-    required this.chatSummaries,
-    required this.onChatSelected,
-    this.onCreateChat,
-    this.onDeleteChat, // Add this parameter
-  }) : super(key: key);
+class ChatSelectionScreen extends StatefulWidget {
+  const ChatSelectionScreen({super.key});
 
-  String _prettify(String input) {
-    final withSpaces = input.replaceAll('-', ' ');
-    if (withSpaces.isEmpty) return withSpaces;
-    return withSpaces[0].toUpperCase() + withSpaces.substring(1);
-  }
+  @override
+  State<StatefulWidget> createState() => _ChatSelectionScreenState();
+}
 
-  void _showCreateChatDialog(BuildContext context) {
-    final textController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    String selectedPrivacy = 'private'; // Default privacy setting
+class _ChatSelectionScreenState extends State<ChatSelectionScreen> {
+  List<ChatSummary>? _chatSummaries;
+  bool _isLoading = true;
+  Timer? _pollingTimer;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Crear Nuevo Chat'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextFormField(
-                controller: textController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Nombre del Chat',
-                  hintText: 'Ej. soporte, proyectos, general',
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Por favor ingresa un nombre válido';
-                  }
-                  final normalizedName = value.trim().toLowerCase().replaceAll(' ', '-');
-                  final exists = chatSummaries.any(
-                    (chat) => chat.name?.toLowerCase() == normalizedName,
-                  );
-
-                  if (exists) {
-                    return 'Ya existe un chat con ese nombre';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              const Text('Privacidad:', style: TextStyle(fontWeight: FontWeight.bold)),
-              RadioListTile<String>(
-                title: const Text('Privado'),
-                subtitle: const Text('Solo usuarios invitados pueden acceder'),
-                value: 'private',
-                groupValue: selectedPrivacy,
-                onChanged: (value) {
-                  if (value != null) {
-                    selectedPrivacy = value;
-                    (context as Element).markNeedsBuild();
-                  }
-                },
-              ),
-              RadioListTile<String>(
-                title: const Text('Público'),
-                subtitle: const Text('Cualquiera puede leer y escribir'),
-                value: 'public',
-                groupValue: selectedPrivacy,
-                onChanged: (value) {
-                  if (value != null) {
-                    selectedPrivacy = value;
-                    (context as Element).markNeedsBuild();
-                  }
-                },
-              ),
-              RadioListTile<String>(
-                title: const Text('Público (solo lectura)'),
-                subtitle: const Text('Cualquiera puede leer, solo usuarios invitados pueden escribir'),
-                value: 'publicReadOnly',
-                groupValue: selectedPrivacy,
-                onChanged: (value) {
-                  if (value != null) {
-                    selectedPrivacy = value;
-                    (context as Element).markNeedsBuild();
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (formKey.currentState!.validate() && onCreateChat != null) {
-                final chatName = textController.text
-                    .trim()
-                    .toLowerCase()
-                    .replaceAll(' ', '-');
-                
-                // Update to pass both name and privacy
-                onCreateChat!(chatName, selectedPrivacy);
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Text('Crear'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  bool _isUserAdmin(ChatSummary chat, User? currentUser) {
-    return currentUser != null && currentUser.id != null && chat.isAdmin(currentUser);
-  }
-
-  void _showContextMenu(BuildContext context, ChatSummary chat, User? currentUser) {
-    // Get the render box and overlay
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    
-    // Calculate position based on tap location (center of widget is a fallback)
-    final Offset position = renderBox.localToGlobal(
-      Offset(renderBox.size.width / 2, renderBox.size.height / 2),
-      ancestor: overlay,
-    );
-    
-    // Create a proper RelativeRect for the menu position (following message_bundle.dart pattern)
-    final RelativeRect rect = RelativeRect.fromRect(
-      Rect.fromPoints(
-        position,
-        position.translate(40, 40), // Small offset to position menu properly
-      ),
-      Offset.zero & overlay.size,
-    );
-    
-    // Check if user is admin
-    final isAdmin = _isUserAdmin(chat, currentUser);
-    
-    // Show menu only if admin and delete callback exists
-    if (isAdmin && onDeleteChat != null) {
-      showMenu(
-        context: context,
-        position: rect,
-        items: [
-          PopupMenuItem(
-            value: 'delete',
-            child: Row(
-              children: const [
-                Icon(Icons.delete, color: Colors.red),
-                SizedBox(width: 8),
-                Text('Borrar chat'),
-              ],
-            ),
-          ),
-        ],
-      ).then((value) {
-        if (value == 'delete' && chat.id != null) {
-          _showDeleteConfirmation(context, chat);
-        }
-      });
-    }
-  }
-
-  void _showDeleteConfirmation(BuildContext context, ChatSummary chat) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar eliminación'),
-        content: Text('¿Estás seguro de que quieres eliminar el chat "${chat.name}"? Esta acción no se puede deshacer.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              if (chat.id != null) {
-                onDeleteChat!(chat.id);
-              }
-            },
-            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  @override
+  void initState() {
+    super.initState();
+    // Initial load of chat summaries
+    _loadChatSummaries();
+    _checkForUpdates();
+    // Set up periodic polling
+    _pollingTimer = Timer.periodic(
+      Duration(seconds: POLLING_INTERVAL_SECONDS),
+      (_) => _checkForUpdates(),
     );
   }
 
   @override
+  void dispose() {
+    // Cancel timer when widget is disposed
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  // Load all chat summaries from server
+  Future<void> _loadChatSummaries() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final summaries = await DBManagers.chat.getChatSummaries();
+
+      if (mounted) {
+        setState(() {
+          _chatSummaries = summaries;
+          _isLoading = false;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading chats: ${error.toString()}')),
+        );
+      }
+    }
+  }
+
+  // Check for updates by sending current summaries to server
+  Future<void> _checkForUpdates() async {
+    print('Checking for updates...');
+    if (_chatSummaries == null || !mounted) return;
+    try {
+      // Convert summaries to the format expected by the server
+      final currentSummaries =
+          _chatSummaries!
+              .map(
+                (summary) => {
+                  '_id': summary.id?.toHexString(),
+                  'name': summary.name,
+                  'latestMessage':
+                      summary.latestMessage != null
+                          ? {
+                            'timestamp':
+                                summary
+                                    .latestMessage!
+                                    .timestamp!
+                                    .millisecondsSinceEpoch,
+                            // Convert DateTime to milliseconds since epoch for proper serialization
+                          }
+                          : null,
+                  'messageCount': summary.messageCount ?? 0,
+                  'privacity': summary.privacity,
+                },
+              )
+              .toList();
+
+      // Send current summaries to server to check for updates
+      final response = await DBManagers.chat.checkForSummariesUpdates(
+        currentSummaries,
+      );
+
+      // Process the update response
+      if (mounted) {
+        bool hasChanges = false;
+
+        // Handle new chats
+        if (response['updates']['new']?.isNotEmpty == true) {
+          final newChats =
+              (response['updates']['new'] as List)
+                  .map((chatData) => ChatSummary.fromMap(chatData))
+                  .toList();
+
+          if (newChats.isNotEmpty) {
+            setState(() {
+              _chatSummaries = [...?_chatSummaries, ...newChats];
+            });
+            hasChanges = true;
+          }
+        }
+
+        // Handle updated chats
+        if (response['updates']['updated']?.isNotEmpty == true) {
+          final updatedChats =
+              (response['updates']['updated'] as List)
+                  .map((chatData) => ChatSummary.fromMap(chatData))
+                  .toList();
+
+          if (updatedChats.isNotEmpty) {
+            setState(() {
+              // Replace existing chats with updated versions
+              for (var updatedChat in updatedChats) {
+                int existingIndex = _chatSummaries!.indexWhere(
+                  (chat) =>
+                      chat.id?.toHexString() == updatedChat.id?.toHexString(),
+                );
+
+                if (existingIndex >= 0) {
+                  _chatSummaries![existingIndex] = updatedChat;
+                }
+              }
+            });
+            hasChanges = true;
+          }
+        }
+
+        // Handle deleted chats
+        if (response['updates']['deleted']?.isNotEmpty == true) {
+          final deletedChatIds = response['updates']['deleted'] as List;
+
+          if (deletedChatIds.isNotEmpty) {
+            setState(() {
+              _chatSummaries!.removeWhere(
+                (chat) => deletedChatIds.contains(chat.id?.toHexString()),
+              );
+            });
+            hasChanges = true;
+          }
+        }
+
+        // Re-sort chats if needed
+        if (hasChanges) {
+          setState(() {
+            _chatSummaries!.sort((a, b) {
+              final int aTime =
+                  a.latestMessage?.timestamp?.millisecondsSinceEpoch ?? 0;
+              final int bTime =
+                  b.latestMessage?.timestamp?.millisecondsSinceEpoch ?? 0;
+              return bTime.compareTo(aTime); // Most recent first
+            });
+          });
+        }
+      }
+    } catch (error) {
+      print('Error checking for updates: $error');
+      // Don't show UI error on background updates to avoid disruption
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Detectamos si estamos en la ruta /chat
+    final isChatRoute = ModalRoute.of(context)?.settings.name == '/chat';
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    Widget body;
+
     final theme = Theme.of(context);
     final chatTheme = theme.extension<ChatTheme>();
-    final currentUser = context.read<UserProvider>().user;
 
-    // Filter chats based on read permissions
-    final accessibleChats = chatSummaries.where((chat) => 
-      chat.canRead(currentUser)
-    ).toList();
+    if (_isLoading) {
+      body = const Scaffold(body: Center(child: CircularProgressIndicator()));
+    } else {
+      body = Container(
+        key: const ValueKey('selector'),
+        width: MediaQuery.of(context).size.width,
+        height: screenHeight,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              chatTheme?.otherMessageGradient.last ?? Colors.blue.shade900,
+              chatTheme?.myMessageGradient.first ?? Colors.deepPurple.shade900,
+            ],
+          ).withOpacity(0.1),
+        ),
+        child: ChatSelection(
+          chatSummaries: _chatSummaries ?? [],
+          onChatSelected: _onChatSelected,
+          onCreateChat: _onCreateChat,
+          onDeleteChat: _onDeleteChat,
+        ),
+      );
+    }
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      floatingActionButton: onCreateChat != null
-          ? FloatingActionButton(
-              onPressed: () => _showCreateChatDialog(context),
-              child: const Icon(Icons.add),
-              tooltip: 'Crear nuevo chat',
-            )
-          : null,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        color: Colors.transparent,
-        child:
-            accessibleChats.isEmpty  // Use filtered list here
-                ? const Center(child: Text('No hay chats disponibles'))
-                : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 15,
-                      runSpacing: 15,
-                      children:
-                          accessibleChats.map((chat) {  // Use filtered list here
-                            final name = _prettify(chat.name ?? 'Unnamed');
-                            Future<User?> future;
-
-                            if (chat.latestMessage == null) {
-                              future = Future.value(null);
-                            } else if (chat.latestMessage!.sender == null) {
-                              future = Future.value(null);
-                            } else if (chat.latestMessage!.sender != null) {
-                              future = DBManagers.user.findById(
-                                chat.latestMessage!.sender!,
-                              );
-                            } else {
-                              future = Future.value(null);
-                            }
-
-                            return SizedBox(
-                              width: 150,
-                              height: 150 / 1.5,
-                              child: FutureBuilder<User?>(
-                                future: future,
-                                builder: (ctx, snapshot) {
-                                  return GestureDetector(
-                                    onSecondaryTap: () => _showContextMenu(context, chat, currentUser),
-                                    onLongPress: () => _showContextMenu(context, chat, currentUser),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(12),
-                                        splashColor:
-                                            chatTheme?.otherQuotedMessageBorderColor
-                                                ?.withOpacity(0.3) ??
-                                            theme.colorScheme.primary.withOpacity(
-                                              0.3,
-                                            ),
-                                        onTap: () => onChatSelected(chat),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 20,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                chatTheme
-                                                    ?.otherQuotedMessageBackgroundColor ??
-                                                theme.colorScheme.surfaceVariant
-                                                    .withOpacity(0.7),
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border(
-                                              left: BorderSide(
-                                                color:
-                                                    chatTheme
-                                                        ?.otherQuotedMessageBorderColor ??
-                                                    theme.colorScheme.primary,
-                                                width: 4,
-                                              ),
-                                            ),
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                name,
-                                                style: theme.textTheme.bodyLarge
-                                                    ?.copyWith(
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                              if (chat.latestMessage != null &&
-                                                  snapshot.data != null) ...[
-                                                const SizedBox(height: 4),
-                                                Expanded(
-                                                  child: RichText(
-                                                    maxLines: 2,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    text: TextSpan(
-                                                      children: [
-                                                        TextSpan(
-                                                          text:
-                                                              chat
-                                                                          .latestMessage!
-                                                                          .sender !=
-                                                                      null
-                                                                  ? "${snapshot.data!.displayName}: "
-                                                                  : "",
-                                                          style: theme
-                                                              .textTheme
-                                                              .bodyMedium
-                                                              ?.copyWith(
-                                                                fontWeight:
-                                                                    FontWeight.bold,
-                                                                color:
-                                                                    theme
-                                                                        .textTheme
-                                                                        .bodyMedium
-                                                                        ?.color,
-                                                              ),
-                                                        ),
-                                                        TextSpan(
-                                                          text:
-                                                              chat
-                                                                  .latestMessage!
-                                                                  .message,
-                                                          style: theme
-                                                              .textTheme
-                                                              .bodyMedium
-                                                              ?.copyWith(
-                                                                color: theme
-                                                                    .textTheme
-                                                                    .bodyMedium
-                                                                    ?.color
-                                                                    ?.withOpacity(
-                                                                      0.7,
-                                                                    ),
-                                                                fontStyle:
-                                                                    FontStyle
-                                                                        .italic,
-                                                              ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            );
-                          }).toList(),
-                    ),
-                  ),
-                ),
+      appBar: CustomAppBar(
+        title: 'DongoChat v$appVersion',
+        actions: [ThemeToggleButton(), DebugButton()],
+        context: context,
+      ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: SizedBox.expand(
+              child: Image.asset(
+                'assets/ajolote contrast.png',
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                opacity: const AlwaysStoppedAnimation(0.1),
+                colorBlendMode: BlendMode.multiply,
+              ),
+            ),
+          ),
+          body,
+          RefreshIndicator(onRefresh: _loadChatSummaries, child: body),
+        ],
       ),
     );
+  }
+
+  void _onChatSelected(ChatSummary value) {
+    Navigator.pushNamed(context, '/chat', arguments: {'chat': value});
+  }
+
+  void _onCreateChat(String name, String privacity) {
+    final user = context.read<UserProvider>().user;
+    final chat = Chat(name: name, privacity: privacity);
+    if (user != null && user.id != null) {
+      chat.adminUsers.add(user.id!);
+    }
+
+    DBManagers.chat
+        .Post(chat)
+        .then((_chat) {
+          if (mounted) {
+            if (_chat != null) {
+              Navigator.pushNamed(
+                context,
+                '/chat',
+                arguments: {'chat': _chat.summary},
+              );
+
+              // Refresh chat list after creating new chat
+              _loadChatSummaries();
+            }
+          }
+        })
+        .catchError((error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error creating chat: ${error.toString()}'),
+              ),
+            );
+          }
+        });
+  }
+
+  void _onDeleteChat(ObjectId id) {
+    // Implement delete functionality
+    DBManagers.chat
+        .Delete(id)
+        .then((_) {
+          if (mounted) {
+            // Refresh chat list after deletion
+            _loadChatSummaries();
+          }
+        })
+        .catchError((error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error deleting chat: ${error.toString()}'),
+              ),
+            );
+          }
+        });
   }
 }

@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
-        android:label="Dongo Chat"
+        android:label="Dongo Chat Beta"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <!-- Estos receptores son necesarios para el funcionamiento correcto -->

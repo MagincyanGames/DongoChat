@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:dongo_chat/api/firebase_api.dart';
 import 'package:dongo_chat/theme/chat_theme.dart';
+import 'package:dongo_chat/widgets/buttons/gradient/send-button.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
@@ -23,7 +24,8 @@ class ChatView extends StatefulWidget {
     MessageData? messageData,
   )
   onSendMessage;
-  final Future<bool> Function() onRefreshMessages;
+  final Future<List<Message>> Function()
+  onRefreshMessages; // Changed return type
   final Future<void> Function(ObjectId messageId)? onDeleteMessage;
   final VoidCallback? onChatInitialized;
   final bool isLoading;
@@ -100,26 +102,36 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   }
 
   void _startRefreshTimer() {
-    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _refreshMessages();
     });
   }
 
   Future<void> _refreshMessages() async {
+    final changedMessages = await widget.onRefreshMessages();
     if (!mounted) return;
 
-    final hasNewMessages = await widget.onRefreshMessages();
-
-    // Always refresh the metadata to ensure quotes are up to date
     await _prefetchMetadata();
 
-    if (hasNewMessages || messageData.resend != null) {
-      if (mounted) setState(() {});
-    }
+    setState(() {
+      // Create a completely new list instead of modifying in-place
+      final updatedMessages = [
+        ...changedMessages,
+        ...widget.chat.messages.where(
+          (msg) => !changedMessages.any((newMsg) => newMsg.id == msg.id),
+        ),
+      ];
+      
+      // Sort messages if needed (by timestamp, for example)
+      updatedMessages.sort((a, b) => 
+          (a.timestamp ?? DateTime.now()).compareTo(b.timestamp ?? DateTime.now()));
+      
+      // Assign the new list
+      widget.chat.messages = updatedMessages;
+    });
   }
 
   Future<void> _prefetchMetadata() async {
-    final userMgr = DBManagers.user;
     final msgs = widget.chat.messages;
 
     try {
@@ -143,7 +155,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
           neededUsers.where((id) => !_userCache.containsKey(id)).toList();
       for (final userId in usersToFetch) {
         try {
-          final user = await userMgr.findById(userId);
+          final user = await DBManagers.user.Get(userId);
           if (user != null) _userCache[userId] = user;
         } catch (e) {
           print('Error fetching user $userId: $e');
@@ -226,19 +238,13 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
         messageData = MessageData();
       });
 
-      await FirebaseApi().sendNotification(
-        widget.chat.name!,
-        text,
-        widget.chat.id!,
-      );
-
       // Force a metadata refresh to ensure quotes are cached
       await _prefetchMetadata();
 
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
-        _showSnackbar('Error al enviar mensaje: ${e.toString()}');
+        _showSnackbar('Error al enviar mensaje: ${e}');
       }
     } finally {
       if (mounted) {
@@ -349,97 +355,124 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     final messages = widget.chat.messages;
     final user = widget.currentUser;
     final bool hasWritePermission = widget.chat.canWrite(widget.currentUser);
-    print('User: ${user?.id.toString()}, Can write: $hasWritePermission');
+
     if (!_initialLoadDone) {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // Get route information
+    final currentRoute = ModalRoute.of(context);
+    final isCurrentRouteChat = currentRoute?.settings.name == '/chat';
+
     return Provider.value(
       value: _userCache,
-      child: Stack(
-        children: [
-          // Existing content
-          Column(
+      // Add this AnimatedBuilder for entrance animation
+      child: AnimatedBuilder(
+        animation: currentRoute?.animation ?? const AlwaysStoppedAnimation(1.0),
+        builder: (context, child) {
+          final animationValue = currentRoute?.animation?.value ?? 1.0;
+
+          return Stack(
             children: [
-              Expanded(
-                child:
-                    messages.isEmpty
-                        ? const Center(child: Text('No hay mensajes aún'))
-                        : ScrollablePositionedList.builder(
-                          key: const PageStorageKey('chat-list'),
-                          itemScrollController: _itemScrollController,
-                          itemPositionsListener: _itemPositionsListener,
-                          itemCount: messages.length,
-                          reverse: true,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          addAutomaticKeepAlives: false,
-                          minCacheExtent: 2000,
-                          itemBuilder: (context, index) {
-                            final actualIndex = messages.length - 1 - index;
-                            final msg = messages[actualIndex];
-                            final msgId = msg.id!;
+              // Apply transform to the chat content
+              Transform.translate(
+                offset: Offset(
+                  (1 - animationValue) * 100,
+                  0,
+                ), // Slide in from right
+                child: Opacity(
+                  opacity: animationValue,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child:
+                            messages.isEmpty
+                                ? const Center(
+                                  child: Text('No hay mensajes aún'),
+                                )
+                                : ScrollablePositionedList.builder(
+                                  key: const PageStorageKey('chat-list'),
+                                  itemScrollController: _itemScrollController,
+                                  itemPositionsListener: _itemPositionsListener,
+                                  itemCount: messages.length,
+                                  reverse: true,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  addAutomaticKeepAlives: false,
+                                  minCacheExtent: 2000,
+                                  itemBuilder: (context, index) {
+                                    final actualIndex =
+                                        messages.length - 1 - index;
+                                    final msg = messages[actualIndex];
+                                    final msgId = msg.id!;
 
-                            // Check if this message is consecutive
-                            final isConsecutive =
-                                actualIndex > 0 &&
-                                messages[actualIndex].sender ==
-                                    messages[actualIndex - 1].sender;
+                                    // Check if this message is consecutive
+                                    final isConsecutive =
+                                        actualIndex > 0 &&
+                                        messages[actualIndex].sender ==
+                                            messages[actualIndex - 1].sender;
 
-                            // Get quoted message if available
-                            final quoted =
-                                msg.data?.resend != null
-                                    ? (_quotedCache[msg.data!.resend!] ??
-                                        Message(
-                                          id: msg.data!.resend,
-                                          message: "Cargando mensaje...",
-                                          iv: "",
-                                        ))
-                                    : null;
+                                    // Get quoted message if available
+                                    final quoted =
+                                        msg.data?.resend != null
+                                            ? (_quotedCache[msg
+                                                    .data!
+                                                    .resend!] ??
+                                                Message(
+                                                  id: msg.data!.resend,
+                                                  message:
+                                                      "Cargando mensaje...",
+                                                ))
+                                            : null;
 
-                            return MessageBubble(
-                              key: ValueKey(msgId),
-                              msg: msg,
-                              me: user?.id ?? ObjectId(),
-                              user: _userCache[msg.sender],
-                              quoted: quoted,
-                              isConsecutive: isConsecutive,
-                              isHighlighted: _highlightedMessageId == msgId,
-                              onQuotedTap: scrollToMessage,
-                              onReply: setReplyMessage,
-                              onShowSnackbar: _showSnackbar,
-                              onQuickReply: _quickReply,
-                            );
-                          },
-                        ),
+                                    return MessageBubble(
+                                      key: ValueKey(msgId),
+                                      msg: msg,
+                                      me: user?.id ?? ObjectId(),
+                                      user: _userCache[msg.sender],
+                                      quoted: quoted,
+                                      isConsecutive: isConsecutive,
+                                      isHighlighted:
+                                          _highlightedMessageId == msgId,
+                                      onQuotedTap: scrollToMessage,
+                                      onReply: setReplyMessage,
+                                      onShowSnackbar: _showSnackbar,
+                                      onQuickReply: _quickReply,
+                                    );
+                                  },
+                                ),
+                      ),
+                      _buildMessageInput(hasWritePermission),
+                    ],
+                  ),
+                ),
               ),
-              _buildMessageInput(hasWritePermission),
-            ],
-          ),
 
-          // Scroll button
-          Positioned(
-            right: 16,
-            bottom: 80,
-            child: AnimatedOpacity(
-              opacity: _showScrollButton ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child:
-                  _showScrollButton
-                      ? FloatingActionButton(
-                        mini: true,
-                        backgroundColor: Theme.of(context).primaryColor,
-                        foregroundColor: Colors.white,
-                        elevation: 3,
-                        onPressed: _scrollToBottom,
-                        child: const Icon(Icons.keyboard_arrow_down),
-                      )
-                      : const SizedBox.shrink(),
-            ),
-          ),
-        ],
+              // Scroll button - keep this the same
+              Positioned(
+                right: 16,
+                bottom: 80,
+                child: AnimatedOpacity(
+                  opacity: _showScrollButton ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child:
+                      _showScrollButton
+                          ? FloatingActionButton(
+                            mini: true,
+                            backgroundColor: Theme.of(context).primaryColor,
+                            foregroundColor: Colors.white,
+                            elevation: 3,
+                            onPressed: _scrollToBottom,
+                            child: const Icon(Icons.keyboard_arrow_down),
+                          )
+                          : const SizedBox.shrink(),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -564,8 +597,15 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(width: 8),
-              GestureDetector(
-                onLongPress: () {
+              SendButton(
+                key: _sendButtonKey,
+                sendMessage: () {
+                  return _loaddingState != 'loading' &&
+                      !widget.isLoading &&
+                      hasWritePermission;
+                },
+                onSendMessage: _sendMessage,
+                loadContextualMenu: (context) {
                   // Get the position of the button using its key
                   final RenderBox? buttonBox =
                       _sendButtonKey.currentContext?.findRenderObject()
@@ -578,45 +618,6 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                     _showMessageTypeMenu(context, buttonPosition);
                   }
                 },
-                child: Container(
-                  key: _sendButtonKey,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(30),
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        Theme.of(context)
-                                .extension<ChatTheme>()
-                                ?.otherMessageGradient
-                                .last ??
-                            Colors.blue.shade900,
-                        Theme.of(
-                              context,
-                            ).extension<ChatTheme>()?.myMessageGradient.first ??
-                            Colors.deepPurple.shade900,
-                      ],
-                    ).withOpacity(0.6),
-                  ),
-                  padding: const EdgeInsets.all(2), // Border thickness
-                  child: Material(
-                    color: Theme.of(context).scaffoldBackgroundColor,
-                    borderRadius: BorderRadius.circular(28),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(28),
-                      onTap:
-                          _loaddingState == 'loading' ||
-                                  widget.isLoading ||
-                                  !hasWritePermission
-                              ? null
-                              : _sendMessage,
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        child: _buildMessageTypeButton(_loaddingState),
-                      ),
-                    ),
-                  ),
-                ),
               ),
             ],
           ),
@@ -680,7 +681,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     final messages = widget.chat.messages;
     final replyMessage = messages.firstWhere(
       (msg) => msg.id == messageData.resend,
-      orElse: () => Message(message: "Mensaje no encontrado", iv: ""),
+      orElse: () => Message(message: "Mensaje no encontrado"),
     );
     final theme = Theme.of(context);
 

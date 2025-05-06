@@ -1,6 +1,10 @@
+import 'dart:convert';
+
+import 'package:dongo_chat/models/chat.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:dongo_chat/models/sizeable.dart';
 import 'package:dongo_chat/utils/crypto.dart';
+import 'package:pointycastle/asymmetric/api.dart';
 
 class MessageData implements Sizeable {
   ObjectId? resend;
@@ -11,7 +15,9 @@ class MessageData implements Sizeable {
 
   factory MessageData.fromMap(Map<String, dynamic> map) {
     return MessageData(
-      resend: map['resend'] as ObjectId?,
+      resend: map['resend'] != null
+          ? ObjectId.parse(map['resend'])
+          : null, // Convertir a ObjectId si no es null
       url: map['url'] as String?,
       type: map['type'] as String?,
     );
@@ -48,6 +54,22 @@ class MessageData implements Sizeable {
 
     return total;
   }
+
+  MessageData encrypt(RSAPublicKey key) {
+    return MessageData(
+      resend: resend,
+      url: url != null ? CryptoUtilities.encryptString(url!) : null,
+      type: type,
+    );
+  }
+
+  MessageData decrypt() {
+    return MessageData(
+      resend: resend,
+      url: url != null ? CryptoUtilities.decryptString(url!) : null,
+      type: type,
+    );
+  }
 }
 
 class Message implements Sizeable {
@@ -55,7 +77,6 @@ class Message implements Sizeable {
   String message; // Debería contener el texto DESENCRIPTADO
   ObjectId? userId; // Cambiar a non-nullable si es necesario
   ObjectId? sender;
-  String? iv; // Cambiar a non-nullable (siempre debe tener IV)
   DateTime? timestamp;
   DateTime? updatedAt; // Cambiar a non-nullable si es necesario
   MessageData? data; // Cambiar a non-nullable si es necesario
@@ -66,7 +87,6 @@ class Message implements Sizeable {
     this.sender,
     this.timestamp,
     this.userId, // Hacerlo requerido
-    required this.iv, // Hacerlo requerido
     this.data,
     this.updatedAt,
   });
@@ -103,19 +123,16 @@ class Message implements Sizeable {
     }
 
     return Message(
-      id: map['_id'] as ObjectId?,
-      message: CryptoUtils.decryptString(
-        map['message'] as String,
-        map['iv'] as String, // Usar el IV almacenado
-      ),
-      sender: map['sender'] as ObjectId?,
+      id: ObjectId.parse(map['_id']),
+      message: map['message'] as String,
+      sender: ObjectId.parse(map['sender']),
       timestamp: timestampDate,
       updatedAt: updatedAtDate,
-
-      iv: null, // Asegurar que se carga el IV
       data:
           map['data'] != null
-              ? MessageData.fromMap(map['data'] as Map<String, dynamic>)
+              ? map['data'] is String
+                  ? MessageData.fromMap(jsonDecode(map['data']))
+                  : MessageData.fromMap(map['data'])
               : null, // Convertir MessageData de mapa a objeto
     );
   }
@@ -127,7 +144,6 @@ class Message implements Sizeable {
       'sender': sender,
       'timestamp': timestamp?.millisecondsSinceEpoch,
       'updatedAt': updatedAt?.millisecondsSinceEpoch,
-      'iv': iv,
       'data': data?.toMap(), // Convertir MessageData a mapa
     };
   }
@@ -158,12 +174,6 @@ class Message implements Sizeable {
       total += 40; // 12 bytes reales + overhead
     }
 
-    // iv (String)
-    if (iv != null) {
-      total += 8; // puntero
-      total += iv!.length * 2; // 2 bytes por carácter
-    }
-
     // timestamp (DateTime) si no es null
     if (timestamp != null) {
       total += 16; // tamaño estimado de DateTime
@@ -175,5 +185,29 @@ class Message implements Sizeable {
     }
 
     return total;
+  }
+
+  Message encrypt(RSAPublicKey key) {
+    var encrypter = CryptoUtilities.getEncrypter(publicKey: key);
+
+    return Message(
+      id: id,
+      message: encrypter.encrypt(message).base64,
+      sender: sender,
+      timestamp: timestamp,
+      userId: userId,
+      data: data?.encrypt(key), // Asegúrate de que los datos estén presentes
+    );
+  }
+
+  Message? decrypt() {
+    return Message(
+      id: id,
+      message: CryptoUtilities.decryptString(message),
+      sender: sender,
+      timestamp: timestamp,
+      userId: userId,
+      data: data?.decrypt(), // Asegúrate de que los datos estén presentes
+    );
   }
 }

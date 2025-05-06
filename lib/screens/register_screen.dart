@@ -1,7 +1,7 @@
 import 'package:dongo_chat/main.dart';
 import 'package:dongo_chat/screens/debug/debug_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:dongo_chat/screens/debug/debug_button.dart';
+import 'package:dongo_chat/widgets/buttons/appbar/debug_button.dart';
 import 'package:dongo_chat/widgets/app_logo.dart';
 import 'package:dongo_chat/widgets/register/already_have_an_account.dart';
 import 'package:dongo_chat/widgets/register/regsiter_form.dart';
