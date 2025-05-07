@@ -9,8 +9,8 @@ import 'package:pointycastle/asymmetric/api.dart';
 class ChatSummary implements Sizeable {
   final ObjectId id;
   final String name;
-  final Message? latestMessage;
-  final Message? latestUpdated;
+  Message? latestMessage;
+  Message? latestUpdated;
   List<ObjectId> readOnlyUsers;
   List<ObjectId> readWriteUsers;
   List<ObjectId> adminUsers;
@@ -322,5 +322,25 @@ class Chat implements Sizeable {
       print("❌ ERROR in findMessageById: $e");
       return null;
     }
+  }
+
+  Chat copyWith({
+    ObjectId? id,
+    String? name,
+    List<Message>? messages,
+    List<ObjectId>? readOnlyUsers,
+    List<ObjectId>? readWriteUsers,
+    List<ObjectId>? adminUsers,
+    String? privacity,
+  }) {
+    return Chat(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      messages: messages ?? List<Message>.from(this.messages),
+      readOnlyUsers: readOnlyUsers ?? List<ObjectId>.from(this.readOnlyUsers),
+      readWriteUsers: readWriteUsers ?? List<ObjectId>.from(this.readWriteUsers),
+      adminUsers: adminUsers ?? List<ObjectId>.from(this.adminUsers),
+      privacity: privacity ?? this.privacity,
+    );
   }
 }

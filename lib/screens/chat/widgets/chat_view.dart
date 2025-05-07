@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:dongo_chat/api/firebase_api.dart';
+import 'package:dongo_chat/providers/user_cache_provider.dart';
 import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:dongo_chat/widgets/buttons/gradient/send-button.dart';
 import 'package:flutter/services.dart';
@@ -54,7 +55,6 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   final GlobalKey _sendButtonKey = GlobalKey();
 
   // Caching maps
-  final Map<ObjectId, User> _userCache = {};
   final Map<ObjectId, Message> _quotedCache = {};
 
   Timer? _refreshTimer;
@@ -102,37 +102,63 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   }
 
   void _startRefreshTimer() {
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _refreshMessages();
     });
   }
 
   Future<void> _refreshMessages() async {
-    final changedMessages = await widget.onRefreshMessages();
-    if (!mounted) return;
+    try {
+      final changedMessages = await widget.onRefreshMessages();
+      if (!mounted) return;
 
-    await _prefetchMetadata();
+      // Get existing messages map for quick lookup
+      final existingMessagesById = <String, Message>{};
+      for (var msg in widget.chat.messages) {
+        if (msg.id != null) {
+          existingMessagesById[msg.id!.oid] = msg;
+        }
+      }
 
-    setState(() {
-      // Create a completely new list instead of modifying in-place
+      // Process changed messages
+      for (final newMsg in changedMessages) {
+        if (newMsg.id != null) {
+          existingMessagesById[newMsg.id!.oid] = newMsg;
+        }
+      }
+
+      // Keep messages without IDs (likely pending messages)
+      final pendingMessages =
+          widget.chat.messages.where((msg) => msg.id == null).toList();
+
+      // Combine existing, changed, and pending messages
       final updatedMessages = [
-        ...changedMessages,
-        ...widget.chat.messages.where(
-          (msg) => !changedMessages.any((newMsg) => newMsg.id == msg.id),
-        ),
+        ...existingMessagesById.values,
+        ...pendingMessages,
       ];
-      
-      // Sort messages if needed (by timestamp, for example)
-      updatedMessages.sort((a, b) => 
-          (a.timestamp ?? DateTime.now()).compareTo(b.timestamp ?? DateTime.now()));
-      
-      // Assign the new list
-      widget.chat.messages = updatedMessages;
-    });
+
+      // Sort messages by timestamp
+      updatedMessages.sort(
+        (a, b) => (a.timestamp ?? DateTime.now()).compareTo(
+          b.timestamp ?? DateTime.now(),
+        ),
+      );
+
+      await _prefetchMetadata();
+
+      if (mounted) {
+        setState(() {
+          widget.chat.messages = updatedMessages;
+        });
+      }
+    } catch (e) {
+      print('Error refreshing messages: $e');
+    }
   }
 
   Future<void> _prefetchMetadata() async {
     final msgs = widget.chat.messages;
+    final userCache = Provider.of<UserCacheProvider>(context, listen: false);
 
     try {
       // First, collect all the needed IDs
@@ -152,11 +178,14 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
 
       // Prefetch users not in cache
       final usersToFetch =
-          neededUsers.where((id) => !_userCache.containsKey(id)).toList();
+          neededUsers.where((id) => userCache.getUser(id) == null).toList();
+
       for (final userId in usersToFetch) {
         try {
           final user = await DBManagers.user.Get(userId);
-          if (user != null) _userCache[userId] = user;
+          if (user != null && mounted) {
+            userCache.cacheUser(user);
+          }
         } catch (e) {
           print('Error fetching user $userId: $e');
         }
@@ -166,7 +195,6 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
       final quotesToFetch =
           neededQuotes.where((id) => !_quotedCache.containsKey(id)).toList();
 
-      // Log for debugging
       if (quotesToFetch.isNotEmpty) {
         print('Fetching ${quotesToFetch.length} quoted messages');
       }
@@ -174,11 +202,17 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
       for (final quoteId in quotesToFetch) {
         try {
           final quote = await widget.chat.findMessageById(quoteId);
-          if (quote != null) {
+          if (quote != null && mounted) {
             _quotedCache[quoteId] = quote;
-            print('Cached quoted message: ${quote.id}');
           } else {
-            print('Failed to find quoted message: $quoteId');
+            // Try to find in existing messages
+            final foundMsg = msgs.firstWhere(
+              (msg) => msg.id == quoteId,
+              orElse: () => Message(message: "Mensaje no encontrado"),
+            );
+            if (foundMsg.message != "Mensaje no encontrado" && mounted) {
+              _quotedCache[quoteId] = foundMsg;
+            }
           }
         } catch (e) {
           print('Error fetching quoted message $quoteId: $e');
@@ -227,19 +261,17 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     setState(() => _loaddingState = 'loading');
 
     try {
+      print('Sending message: $text');
       await widget.onSendMessage(
         text,
         widget.currentUser?.id ?? ObjectId(),
         messageData,
       );
-
+      print('Message sent: $text');
       setState(() {
-        _loaddingState = 'pushing';
+        _loaddingState = 'none';
         messageData = MessageData();
       });
-
-      // Force a metadata refresh to ensure quotes are cached
-      await _prefetchMetadata();
 
       _scrollToBottom();
     } catch (e) {
@@ -345,7 +377,12 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _textFieldFocus.dispose();
-    _refreshTimer?.cancel();
+    // Asegúrate de que el timer se cancele correctamente
+    if (_refreshTimer != null) {
+      print('Canceling refresh timer in ChatView dispose');
+      _refreshTimer!.cancel();
+      _refreshTimer = null;
+    }
     _controller.dispose();
     super.dispose();
   }
@@ -355,6 +392,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     final messages = widget.chat.messages;
     final user = widget.currentUser;
     final bool hasWritePermission = widget.chat.canWrite(widget.currentUser);
+    final userCache = Provider.of<UserCacheProvider>(context);
 
     if (!_initialLoadDone) {
       return const Center(child: CircularProgressIndicator());
@@ -365,7 +403,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     final isCurrentRouteChat = currentRoute?.settings.name == '/chat';
 
     return Provider.value(
-      value: _userCache,
+      value: userCache.allUsers,
       // Add this AnimatedBuilder for entrance animation
       child: AnimatedBuilder(
         animation: currentRoute?.animation ?? const AlwaysStoppedAnimation(1.0),
@@ -431,7 +469,7 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                                       key: ValueKey(msgId),
                                       msg: msg,
                                       me: user?.id ?? ObjectId(),
-                                      user: _userCache[msg.sender],
+                                      user: userCache.getUser(msg.sender),
                                       quoted: quoted,
                                       isConsecutive: isConsecutive,
                                       isHighlighted:
@@ -600,10 +638,9 @@ class ChatViewState extends State<ChatView> with WidgetsBindingObserver {
               SendButton(
                 key: _sendButtonKey,
                 sendMessage: () {
-                  return _loaddingState != 'loading' &&
-                      !widget.isLoading &&
-                      hasWritePermission;
+                  return hasWritePermission;
                 },
+                loaddingState: _loaddingState,
                 onSendMessage: _sendMessage,
                 loadContextualMenu: (context) {
                   // Get the position of the button using its key

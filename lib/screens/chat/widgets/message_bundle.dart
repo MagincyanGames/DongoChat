@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:dongo_chat/providers/user_cache_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 import 'package:open_file/open_file.dart';
@@ -463,6 +464,7 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   Widget _buildQuotedMessage(Message originalMessage, ThemeData theme) {
     final chatTheme = theme.extension<ChatTheme>();
+    final userCache = Provider.of<UserCacheProvider>(context, listen: false);
 
     return Builder(
       builder: (context) {
@@ -502,11 +504,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  Provider.of<Map<ObjectId, User>>(
-                        context,
-                        listen: false,
-                      )[originalMessage.sender]?.displayName ??
-                      'Desconocido',
+                  userCache.getUser(originalMessage.sender)?.displayName ?? 'Desconocido',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,

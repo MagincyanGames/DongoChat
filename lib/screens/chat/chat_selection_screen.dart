@@ -6,12 +6,14 @@ import 'package:dongo_chat/database/db_managers.dart';
 import 'package:dongo_chat/main.dart';
 import 'package:dongo_chat/models/chat.dart';
 import 'package:dongo_chat/providers/UserProvider.dart';
+import 'package:dongo_chat/providers/user_cache_provider.dart';
 import 'package:dongo_chat/screens/chat/widgets/chat_selection.dart';
 import 'package:dongo_chat/theme/chat_theme.dart';
 import 'package:dongo_chat/widgets/app_bar.dart';
 import 'package:dongo_chat/widgets/buttons/appbar/debug_button.dart';
 import 'package:dongo_chat/widgets/buttons/appbar/theme_toggle_button.dart';
 import 'package:flutter/material.dart';
+import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 import 'package:provider/provider.dart';
 
 // Polling interval in seconds - can be adjusted as needed
@@ -33,8 +35,10 @@ class _ChatSelectionScreenState extends State<ChatSelectionScreen> {
   void initState() {
     super.initState();
     // Initial load of chat summaries
-    _loadChatSummaries();
-    _checkForUpdates();
+    _loadChatSummaries().then((n) {
+      _checkForUpdates();
+    });
+
     // Set up periodic polling
     _pollingTimer = Timer.periodic(
       Duration(seconds: POLLING_INTERVAL_SECONDS),
@@ -63,6 +67,9 @@ class _ChatSelectionScreenState extends State<ChatSelectionScreen> {
           _chatSummaries = summaries;
           _isLoading = false;
         });
+
+        // Prefetch de usuarios después de cargar los resúmenes
+        await _prefetchUserData();
       }
     } catch (error) {
       if (mounted) {
@@ -180,10 +187,43 @@ class _ChatSelectionScreenState extends State<ChatSelectionScreen> {
             });
           });
         }
+
+        // Prefetch user data after updates
+        if (hasChanges && mounted) {
+          await _prefetchUserData();
+        }
       }
     } catch (error) {
       print('Error checking for updates: $error');
       // Don't show UI error on background updates to avoid disruption
+    }
+  }
+
+  Future<void> _prefetchUserData() async {
+    if (_chatSummaries == null || _chatSummaries!.isEmpty) return;
+
+    final userCache = Provider.of<UserCacheProvider>(context, listen: false);
+    final Set<ObjectId> userIdsToFetch = {};
+
+    // Recolectar todos los IDs de usuarios de los últimos mensajes
+    for (var chatSummary in _chatSummaries!) {
+      if (chatSummary.latestMessage?.sender != null) {
+        userIdsToFetch.add(chatSummary.latestMessage!.sender!);
+      }
+    }
+
+    // Obtener los usuarios que no están en caché
+    for (var userId in userIdsToFetch) {
+      if (userCache.getUser(userId) == null) {
+        try {
+          final user = await DBManagers.user.Get(userId);
+          if (user != null) {
+            userCache.cacheUser(user);
+          }
+        } catch (e) {
+          print('Error fetching user $userId: $e');
+        }
+      }
     }
   }
 
@@ -220,6 +260,7 @@ class _ChatSelectionScreenState extends State<ChatSelectionScreen> {
           onChatSelected: _onChatSelected,
           onCreateChat: _onCreateChat,
           onDeleteChat: _onDeleteChat,
+          onEditChat: _onEditChat, // Add this line
         ),
       );
     }
@@ -308,5 +349,46 @@ class _ChatSelectionScreenState extends State<ChatSelectionScreen> {
             );
           }
         });
+  }
+
+  void _onEditChat(ObjectId id, String name, String privacity, ChatSummary updatedChat) {
+    setState(() {
+      _isLoading = true;
+    });
+
+    // Prepare update data including user lists
+    final updateData = {
+      'name': name, 
+      'privacity': privacity,
+      'adminUsers': updatedChat.adminUsers.map((id) => id.toHexString()).toList(),
+      'readWriteUsers': updatedChat.readWriteUsers.map((id) => id.toHexString()).toList(),
+      'readOnlyUsers': updatedChat.readOnlyUsers.map((id) => id.toHexString()).toList(),
+    };
+
+    DBManagers.chat
+      .updateChat(id, updateData)
+      .then((updatedChat) {
+        if (mounted) {
+          // Refresh chat list after updating
+          _loadChatSummaries();
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Chat actualizado correctamente')),
+          );
+        }
+      })
+      .catchError((error) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error actualizando chat: ${error.toString()}'),
+            ),
+          );
+        }
+      });
   }
 }

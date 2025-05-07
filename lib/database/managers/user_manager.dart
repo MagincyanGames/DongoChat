@@ -162,4 +162,31 @@ class UserManager extends ApiManager<User> {
 
     return super.Get(id);
   }
+
+  /// Get all users
+  Future<List<User>> getAll() async {
+    if (needAuth && (databaseService.auth == null || databaseService.auth!.isEmpty)) {
+      throw Exception('Authentication required');
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          if (needAuth) 'Authorization': 'Bearer ${databaseService.auth}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((userData) => fromMap(userData)).toList();
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['message'] ?? 'Failed to fetch users');
+      }
+    } catch (e) {
+      throw Exception('Error fetching users: $e');
+    }
+  }
 }

@@ -10,6 +10,7 @@ import 'package:dongo_chat/models/chat.dart';
 import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 import 'package:provider/provider.dart';
 import 'package:dongo_chat/providers/chat_cache_provider.dart';
+import 'package:dongo_chat/main.dart' show routeObserver;
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -18,18 +19,50 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with RouteAware {
   ChatSummary? summary;
   Chat? chat;
-  Future<Chat?>? _futureChat; // Variable para almacenar el Future
+  Future<Chat?>? _futureChat;
 
   @override
   void initState() {
     super.initState();
-    // We'll extract the parameters when the widget initializes
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _extractChatParameters();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    print('Volviendo a ChatScreen - refrescando mensajes');
+    if (chat != null && summary != null) {
+      onRefreshMessages().then((messages) {
+        if (messages.isNotEmpty) {
+          print(
+            'Se actualizaron ${messages.length} mensajes al volver a la pantalla',
+          );
+          setState(() {
+            chat = Provider.of<ChatCacheProvider>(
+              context,
+              listen: false,
+            ).getCachedChat(summary!.id);
+          });
+        }
+      });
+    }
+    super.didPopNext();
   }
 
   void _extractChatParameters() {
@@ -39,7 +72,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final chatSummary = args['chat'] as ChatSummary;
         setState(() {
           summary = chatSummary;
-          _futureChat = _fetchChat(); // Inicializar el Future aquí
+          _futureChat = _fetchChat();
         });
       }
     } else {
@@ -50,27 +83,21 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<Chat?> _fetchChat() async {
     if (summary == null) return null;
 
-    // Check if we have a cached version first
     final chatCache = Provider.of<ChatCacheProvider>(context, listen: false);
     Chat? cachedChat = chatCache.getCachedChat(summary!.id);
 
-    // Always fetch fresh data from server
     var freshChat = await DBManagers.chat.Get(summary!.id);
 
     if (freshChat != null) {
       var decryptedChat = freshChat.decrypt();
 
-      // If we have a cached version with potentially more messages,
-      // merge them with the fresh data
       if (cachedChat != null &&
           cachedChat.messages.length > decryptedChat!.messages.length) {
-        // Create a map of fresh messages for easy lookup
         final freshMessagesById = {
           for (var msg in decryptedChat.messages)
             if (msg.id != null) msg.id!.toHexString(): msg,
         };
 
-        // Include any message from cache that isn't in fresh data
         final mergedMessages = [
           ...decryptedChat.messages,
           ...cachedChat.messages.where(
@@ -80,7 +107,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ];
 
-        // Sort by timestamp
         mergedMessages.sort(
           (a, b) => (a.timestamp ?? DateTime.now()).compareTo(
             b.timestamp ?? DateTime.now(),
@@ -90,21 +116,15 @@ class _ChatScreenState extends State<ChatScreen> {
         decryptedChat.messages = mergedMessages;
       }
 
-      // Update the cache
       chatCache.cacheChat(decryptedChat!);
       return decryptedChat;
     }
 
-    // Return cached version if no fresh data
     return cachedChat;
   }
 
   @override
   Widget build(BuildContext context) {
-    // Alternative approach: extract parameters in build method
-    // final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    // final chatSummary = args?['chat'] as ChatSummary?;
-    // final chatId = chatSummary?.id;
     if (summary == null) {
       return const Center(child: Text('No chat ID provided'));
     }
@@ -170,85 +190,67 @@ class _ChatScreenState extends State<ChatScreen> {
     ObjectId sender,
     MessageData? messageData,
   ) async {
-    // Update cache
     final chatCache = Provider.of<ChatCacheProvider>(context, listen: false);
     chatCache.cacheChat(chat!);
 
-    // Update database
-    final messageId = await DBManagers.chat.addMessageToChat(
-      summary!.id,
-      text,
-      sender,
-      messageData,
-    );
+    try {
+      final messageId = await DBManagers.chat.addMessageToChat(
+        summary!.id,
+        text,
+        sender,
+        messageData,
+      );
+      final tempMessage = Message(
+        id: messageId,
+        message: text,
+        sender: sender,
+        timestamp: DateTime.now(),
+        data: messageData,
+      );
 
-    final newMessage = Message(
-      id: messageId, // Generate a temporary ID
-      message: text,
-      sender: sender,
-      timestamp: DateTime.now(),
-      data: messageData,
-    );
-    setState(() {
-      chat!.messages.add(newMessage);
-    });
+      setState(() {
+        chat!.messages.add(tempMessage);
+      });
+
+      chatCache.cacheChat(chat!);
+
+      if (summary != null) {
+        summary!.latestMessage = tempMessage;
+        chatCache.updateChatSummary(summary!);
+      }
+    } catch (e) {
+      print('Error sending message: $e');
+    }
   }
 
   Future<List<Message>> onRefreshMessages() async {
-    print("Refreshing messages...");
-    // Get the updated chat data
-    var updatedChat = await DBManagers.chat.checkForChatUpdate(summary!);
+    try {
+      print("Refreshing messages...");
 
-    if (chat == null) {
-      print("Chat is null, cannot check for updates.");
-      return [];
-    }
-
-    // If no updates or null returned, return empty list
-    if (updatedChat == null) {
-      print("No chat found or no updates available.");
-      return [];
-    }
-    // Find messages that are new or updated
-    List<Message> changedMessages = [];
-    // Create a map of existing messages by ID for easy lookup
-
-    final existingMessagesById = {
-      for (var msg in chat!.messages)
-        if (msg.id != null) msg.id!: msg,
-    };
-
-    print("Existing messages: ${existingMessagesById.length}");
-    print("Updated messages: ${updatedChat.messages.length}");
-
-    // Check each message in the updated chat
-    for (final newMsg in updatedChat.messages) {
-      if (newMsg.id == null) {
-        // Message without ID should be included (likely new)
-        changedMessages.add(newMsg);
-        continue;
+      if (!mounted) {
+        print("Widget no longer mounted, skipping refresh");
+        return [];
       }
 
-      final msgId = newMsg.id!;
-      final existingMsg = existingMessagesById[msgId];
-
-      if (existingMsg == null) {
-        // Message doesn't exist in current chat, it's new
-        changedMessages.add(newMsg);
-      } else {
-        // Check if message was updated by comparing relevant fields
-        final hasChanged =
-            newMsg.message != existingMsg.message ||
-            newMsg.timestamp != existingMsg.timestamp ||
-            newMsg.data?.toString() != existingMsg.data?.toString();
-
-        if (hasChanged) {
-          changedMessages.add(newMsg);
-        }
+      if (chat == null || summary == null) {
+        print("Chat is null, cannot check for updates.");
+        return [];
       }
-    }
 
-    print("Found ${changedMessages.length} changed messages");
-    return changedMessages;
+      var updatedChat = await DBManagers.chat.checkForChatUpdate(summary!);
+
+      if (updatedChat == null) {
+        print("No chat found or no updates available.");
+        return [];
+      }
+
+      final chatCache = Provider.of<ChatCacheProvider>(context, listen: false);
+      chatCache.cacheChat(updatedChat);
+
+      return updatedChat.messages;
+    } catch (e) {
+      print('Error in onRefreshMessages: $e');
+      return [];
+    }
   }
 }

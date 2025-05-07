@@ -6,11 +6,14 @@ class SendButton extends GradientButton {
   final bool Function() sendMessage;
   final Function? onSendMessage;
   final Function(BuildContext context)? loadContextualMenu;
-  
+
+  final String? loaddingState;
+
   const SendButton({
     Key? key,
     required this.sendMessage,
     required this.onSendMessage,
+    this.loaddingState,
     this.loadContextualMenu,
   }) : super(key: key);
 
@@ -30,6 +33,12 @@ class SendButton extends GradientButton {
 
   @override
   IconData getIcon(BuildContext context) {
+    if (loaddingState == 'loading') {
+      return Icons.hourglass_empty;
+    }
+    if (loaddingState == 'pushing') {
+      return Icons.campaign;
+    }
     return Icons.send;
   }
 
@@ -41,7 +50,7 @@ class SendButton extends GradientButton {
 
     return Future.value(null);
   }
-  
+
   @override
   Future<void> onLongPress(BuildContext context) async {
     if (this.loadContextualMenu != null) {

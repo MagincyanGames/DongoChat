@@ -20,7 +20,7 @@ class DatabaseService extends ChangeNotifier {
   
   // Server URLs
   final String _localServerUrl = 'http://192.168.0.71:10000/api';
-  final String _onlineServerUrl = 'https://dongoserver.onrender.com/api';
+  final String _onlineServerUrl = 'http://79.99.40.71:6225/api';
   
   // Current connection string
   String _connectionString = '';

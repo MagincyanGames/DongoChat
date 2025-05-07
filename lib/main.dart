@@ -9,6 +9,7 @@ import 'package:dongo_chat/models/user.dart';
 import 'package:dongo_chat/providers/ThemeProvider.dart';
 import 'package:dongo_chat/providers/UserProvider.dart';
 import 'package:dongo_chat/providers/chat_cache_provider.dart';
+import 'package:dongo_chat/providers/user_cache_provider.dart';
 import 'package:dongo_chat/routes/main_routes.dart';
 import 'package:dongo_chat/screens/chat/main_screen.dart';
 import 'package:dongo_chat/screens/login_screen.dart';
@@ -25,6 +26,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+// Añade esta línea al nivel de archivo
+final RouteObserver<ModalRoute<void>> routeObserver = RouteObserver<ModalRoute<void>>();
 
 // Definición centralizada de la versión de la app
 late String appVersion;
@@ -95,6 +99,7 @@ void main() async {
         ChangeNotifierProvider<UserProvider>(create: (_) => UserProvider()),
         ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => ChatCacheProvider()),
+        ChangeNotifierProvider(create: (_) => UserCacheProvider()),
       ],
       child: const MainApp(),
     ),
@@ -162,6 +167,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       themeMode: themeProvider.themeMode,
       navigatorKey: navigatorKey,
       routes: MainRoutes,
+      navigatorObservers: [routeObserver],
       home: FutureBuilder<User?>(
         future: _initialUserFuture,
         builder: (context, snap) {

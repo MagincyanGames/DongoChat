@@ -122,7 +122,7 @@ class ChatManager extends ApiManager<Chat> {
         Uri.parse(customUrl),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${databaseService.auth}',
+          'Authorization': 'Bearer ${auth}',
         },
         body: jsonEncode(summary.toMap()),
       );
@@ -139,6 +139,34 @@ class ChatManager extends ApiManager<Chat> {
     } catch (e) {
       print('Error checking for updates: $e');
       rethrow;
+    }
+  }
+
+  Future<ChatSummary?> updateChat(ObjectId id, Map<String, dynamic> updateData) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$url/${id.toHexString()}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${auth}',
+        },
+        body: json.encode(updateData),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        if (responseData['summary'] != null) {
+          // Update the summary in local cache if needed
+          final updatedSummary = ChatSummary.fromMap(responseData['summary']);
+          return updatedSummary;
+        }
+      } else {
+        throw Exception('Failed to update chat: ${response.body}');
+      }
+      return null;
+    } catch (e) {
+      print('Error updating chat: $e');
+      throw e;
     }
   }
 }

@@ -16,8 +16,8 @@ abstract class ApiManager<T extends Sizeable> implements Sizeable {
   Duration _retryDelay = const Duration(seconds: 1);
 
   // Configurable base URL
-  // static String baseUrl = 'https://dongoserver.onrender.com/api';
-  static String baseUrl = 'http://play.onara.top:10000/api';
+  static String baseUrl = 'http://79.99.40.71:6225/api';
+  // static String baseUrl = 'http://localhost:10000/api';
 
   // Allow setting a different base URL for testing or production environments
   static void setBaseUrl(String url) {

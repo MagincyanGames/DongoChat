@@ -1,5 +1,8 @@
+import 'package:dongo_chat/models/user.dart';
+import 'package:dongo_chat/screens/chat/widgets/user_selection_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:dongo_chat/theme/chat_theme.dart';
+import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
 
 class DialogService {
   // Simple confirmation dialog
@@ -193,10 +196,14 @@ class DialogService {
           title, 
           style: chatTheme?.dialogTitleStyle,
         ),
-        content: Theme(
-          data: formTheme,
-          child: SingleChildScrollView(
-            child: content,
+        content: Container(
+          width: 400, // Set appropriate width
+          height: 300, // Set appropriate height
+          child: Theme(
+            data: formTheme,
+            child: SingleChildScrollView(
+              child: content,
+            ),
           ),
         ),
         backgroundColor: backgroundColor ?? 
@@ -226,5 +233,32 @@ class DialogService {
       barrierColor: barrierColor ?? Colors.black54,
       builder: builder,
     );
+  }
+
+  /// Shows a dialog to select users for a chat
+  static Future<Map<String, Set<ObjectId>>?> showUserSelectionDialog({
+    required BuildContext context,
+    required User currentUser,
+    Set<ObjectId>? initialAdmins,
+    Set<ObjectId>? initialMembers,
+    Set<ObjectId>? initialBanned,
+  }) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => UserSelectionDialog(
+        initialAdmins: initialAdmins ?? {},
+        initialMembers: initialMembers ?? {},
+        initialBanned: initialBanned ?? {},
+        currentUser: currentUser,
+      ),
+    );
+    
+    if (result == null) return null;
+    
+    return {
+      'admins': result['admins'] as Set<ObjectId>,
+      'members': result['members'] as Set<ObjectId>,
+      'banned': result['banned'] as Set<ObjectId>,
+    };
   }
 }
